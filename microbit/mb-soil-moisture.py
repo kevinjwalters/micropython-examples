@@ -1,4 +1,4 @@
-### mb-soil-moisture.py v1.1
+### mb-soil-moisture.py v1.2
 ### Show soil moisture on micro:bit display using resistive and capacitive sensors
 
 ### Tested with BBC micro:bit v1.5 and MicroPython v1.9.2-34-gd64154c73
@@ -34,12 +34,14 @@
 
 
 import utime
-from microbit import display, pin0, pin1, pin13, sleep
+from microbit import display, pin0, pin1, pin13, pin16, sleep
 import neopixel
 
-### Detach Music Bit and Sound Bit from P0 and P1 if using Edu:bit
-RES_PIN = pin0
-CAP_PIN = pin1
+### Detach Music Bit and Sound Bit from P0 and P1 if using Edu:bit and
+### Traffic Light Bit to allow brief powering of the resistive sensor
+SOIL_RES_SIG_PIN = pin0
+SOIL_CAP_SIG_PIN = pin1
+SOIL_RES_PWR_PIN = pin16
 
 NEOPIXEL_PIN = pin13
 
@@ -123,11 +125,16 @@ def adc_to_moisture(raw_adc, arid_value, sodden_value):
     return min(100.0, max(0.0, fraction * 100.0))
 
 
-def get_res_moisture():
-    return adc_to_moisture(RES_PIN.read_analog(), *RES_RANGE)
+def get_res_moisture(power_pin=True):
+    if power_pin:
+        SOIL_RES_PWR_PIN.write_digital(1)
+    res_adc = adc_to_moisture(SOIL_RES_SIG_PIN.read_analog(), *RES_RANGE)
+    if power_pin:
+        SOIL_RES_PWR_PIN.write_digital(0)
+    return res_adc
 
 def get_cap_moisture():
-    return adc_to_moisture(CAP_PIN.read_analog(), *CAP_RANGE)
+    return adc_to_moisture(SOIL_CAP_SIG_PIN.read_analog(), *CAP_RANGE)
 
 
 flash_toggle = False
