@@ -43,6 +43,8 @@ SOIL_RES_SIG_PIN = pin0
 SOIL_CAP_SIG_PIN = pin1
 SOIL_RES_PWR_PIN = pin16
 
+RES_SETTLE_TIME_MS = 50  ### 50ms
+
 NEOPIXEL_PIN = pin13
 
 ### Values for (dry, wet) based on values from CircuitPython version
@@ -128,7 +130,10 @@ def adc_to_moisture(raw_adc, arid_value, sodden_value):
 def get_res_moisture(power_pin=True):
     if power_pin:
         SOIL_RES_PWR_PIN.write_digital(1)
+        sleep(RES_SETTLE_TIME_MS)
+
     res_adc = adc_to_moisture(SOIL_RES_SIG_PIN.read_analog(), *RES_RANGE)
+
     if power_pin:
         SOIL_RES_PWR_PIN.write_digital(0)
     return res_adc
