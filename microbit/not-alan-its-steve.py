@@ -1,7 +1,8 @@
-### not-alan-its-steve.py v1.1
+### not-alan-its-steve.py v1.2
 ### Play sequences of audio samples triggered by a PIR sensor
 
 ### Tested with BBC micro:bit v2 and MicroPython v1.15-64-g1e2f0d280
+### and micro:bit v1 and MicroPython v1.9.2-34-gd64154c73
 
 ### MIT License
 
@@ -52,9 +53,12 @@ def play_sequence(audio_sequence):
 
 
 ### External speaker on P0 + V2 one together!
-speaker.on()
+try:
+    speaker.on()
+except NameError:
+    pass  ### speaker-less V1
 
-### Mini PIR on pin8
+### Mini PIR on pin8 - also works with Cytron edu:bit IR Bit
 pin8.set_pull(pin8.NO_PULL)
 
 alan = "alan.raw"
