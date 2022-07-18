@@ -1,4 +1,4 @@
-### carbon-intensity.py v1.0
+### carbon-intensity.py v1.1
 ### Download UK Carbon Intensity data over Wi-Fi and show on an SSD1306 screen
 
 ### Tested with Pi Pico W and MicroPython v1.19.1
@@ -27,6 +27,15 @@
 ### OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ### SOFTWARE.
 
+### This displays the data from the UK Carbon Intensity service
+### on a 128x64 SSD1306 OLED screen attached to SDA GP0, SCL GP1
+### The service is polled every 30 minutes for new data
+### The left button on a Maker Pi Pico W will fetch new data immediately
+### Wi-Fi details go in secrets.py
+
+### Article descring all this in
+### https://www.instructables.com/Electricity-Carbon-Intensity-Display-Using-Pi-Pico/
+
 
 import time
 
@@ -48,8 +57,9 @@ HEIGHT = 64
 FONT_WIDTH = 8
 FONT_HEIGHT = 8
 
+CIAF_NATIONAL_URL = "https://api.carbonintensity.org.uk/intensity"
 FUEL_MIX_NATIONAL_URL = "https://api.carbonintensity.org.uk/generation"
-FUEL_MIX_LOCAL_URL = "https://api.carbonintensity.org.uk/generation"
+FUEL_MIX_CIF_LOCAL_URL = "https://api.carbonintensity.org.uk/regional/postcode"
 
 REQUEST_ATTEMPTS = 5
 RETRY_PAUSE_S = 20
@@ -157,7 +167,7 @@ class GenerationDashboard:
     def __init__(self, i2c_,
                  width=WIDTH, height=HEIGHT,
                  font_width=FONT_HEIGHT, font_height=FONT_HEIGHT,
-                 title="Electricity Fuel"):
+                 title="Electricity CI"):
         self._i2c = i2c_
         self._width = width
         self._height = height
@@ -166,31 +176,35 @@ class GenerationDashboard:
 
         self._oled = SSD1306_I2C(width, height, i2c)
         self._oled.fill(0)
-        if title:
-            self._oled.text(title,
-                            (self._width - len(title) * font_width) // 2,
-                            0)
-        self._oled.show()
 
+        self._title_y = 0
         self._bar_y = 8
         self._bar_height = 8
         self._bar_width = self._width
         self._text_y = 16
         self._text_cols = (4, 4 + self._width // 2)
+        self._ci_y = self._height - 8
         self._colour = 1
 
+        if title:
+            self._oled.text(title,
+                            (self._width - len(title) * font_width) // 2,
+                            self._title_y,
+                            self._colour)
+        self._oled.show()
 
     def low_carbon(self, fuel, threshold=150):
         carbon_intensity = self.CI_REF.get(fuel)
         return not(carbon_intensity is None or carbon_intensity >= threshold)
 
-    def update(self, data, end_time=None):
+    ### pylint: disable=too-many-locals
+    def update(self, gmix_, ciaf_, area="Nat", end_time=None):
         """data is a list of dict with fuel and perc entries."""
 
         self._oled.fill(0)
 
         if end_time is not None:
-            self._oled.text(end_time, 0, 0, self._colour)
+            self._oled.text(end_time, 0, self._title_y, self._colour)
 
         ### Two columns with low carbon on left
         left_x, right_x = self._text_cols
@@ -198,7 +212,7 @@ class GenerationDashboard:
         right_y = self._text_y
         large_fission = 0
         green = 0
-        for row in data:
+        for row in gmix_:
             fuel = row.get("fuel")
             perc = row.get("perc")
             if fuel is not None and perc is not None:
@@ -221,9 +235,28 @@ class GenerationDashboard:
 
         self._draw_bar(green, fission=large_fission)
 
+        ### Risky assumption that bottom row is free!
+        ### Output will look like "Nat A230 F226"
+        if area or ciaf_:
+            comp = []
+            if area is not None and len(area) > 0:
+                comp.append(area)
+            if ciaf_ is not None:
+                actual = ciaf_.get("actual")
+                forecast = ciaf_.get("forecast")
+                if actual:
+                    comp.append("A" + vcompact_str(actual))
+                if forecast:
+                    comp.append("F" + vcompact_str(forecast))
+
+            self._oled.text(" ".join(comp),
+                            0,
+                            self._ci_y,
+                            self._colour)
+
         ### Column separator
         self._oled.fill_rect(right_x - left_x - 1, self._text_y,
-                             2, self._height - self._text_y,
+                             2, max(left_y, right_y) - self._text_y,
                              self._colour)
         self._oled.show()
 
@@ -324,6 +357,7 @@ if wlan_status == CYW43_LINK_UP:
 ### SSD1306 with some retries if there are request errors including
 ### checking health of Wi-Fi connection and re-establishing this as
 ### needed
+urls = [FUEL_MIX_NATIONAL_URL, CIAF_NATIONAL_URL]
 last_fetch_attempt_ms = None
 while True:
     if (button_left()
@@ -331,15 +365,16 @@ while True:
         or time.ticks_diff(time.ticks_ms(),
                            last_fetch_attempt_ms) > FETCH_PERIOD_MS):
         for _ in range(REQUEST_ATTEMPTS):
-            resp_data = None
-            url = FUEL_MIX_NATIONAL_URL
+            resp_data = []
+
             last_fetch_attempt_ms = time.ticks_ms()
-            d_print(2, "Fetching", url)
+            d_print(2, "Fetching", urls)
             try:
                 pixel.status = PixelStatus.FETCHING
-                resp = requests.get(url)
-                resp_data = resp.json()
-                d_print(4, "Response JSON", resp_data)
+                for url in urls:
+                    resp = requests.get(url)
+                    resp_data.append(resp.json())
+                    d_print(4, "Response JSON", resp_data)
             except Exception as ex:
                 print("Requested failed: " + str(ex))
                 pixel.status = PixelStatus.REQUEST_ERROR
@@ -348,17 +383,18 @@ while True:
                     pixel.status = PixelStatus.DISCONNECTED
                     wlan_status = wifi_connect(wlan, reconnect=True)
 
-            if resp_data:
+            if len(resp_data) == len(urls):
                 break
             time.sleep(RETRY_PAUSE_S)
 
-        if resp_data:
+        if len(resp_data) == len(urls):
             try:
-                gmix = resp_data["data"]["generationmix"]
-                date_to = resp_data["data"]["to"]
-                dashboard.update(gmix, end_time=date_to)
+                gmix = resp_data[0]["data"]["generationmix"]
+                ciaf = resp_data[1]["data"][0]["intensity"]
+                date_to = resp_data[1]["data"][0]["to"]
+                dashboard.update(gmix, ciaf, end_time=date_to)
                 pixel.status = PixelStatus.CONNECTED_OK
-            except Exception as ex:
+            except IOError as ex:
                 print("Dashboard exception: " + str(ex))
 
     time.sleep(SLEEP_MAIN_LOOP_S)
