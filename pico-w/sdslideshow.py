@@ -1,5 +1,5 @@
-### sdslideshow.py v0.3
-### Slide show of files on microsd card
+### sdslideshow.py v1.0
+### Slide show of jpeg files on microSD card
 
 ### Tested with Inky Frame and Pimoroni MicroPython v1.19.3
 
@@ -27,26 +27,41 @@
 ### OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ### SOFTWARE.
 
+### TODO - go into low power mode for the sleep between images
+### TODO - use two buttons to jump forward and back
+### TODO - use button to select different modes
+### TODO - add index file to order the slideshow
 
 import gc
 import re
-import random
 import time
 
 import uos
-from machine import Pin
+from machine import Pin, SPI
 import jpegdec
 from picographics import PicoGraphics, DISPLAY_INKY_FRAME as DISPLAY
 
-gc.collect()
+import sdcard
 
+
+gc.collect()
 graphics = PicoGraphics(DISPLAY)
+
+IMAGE_PAUSE = 300
+
+IF_BLACK = 0
+IF_WHITE = 1
+IF_GREEN = 2
+IF_BLUE = 3
+IF_RED = 4
+IF_YELLOW = 5
+IF_ORANGE = 6
+IF_TAUPE = 7
 
 SD_MOUNTPOINT = "/sd"
 SLIDE_DIR = SD_MOUNTPOINT + "/slides"
 JPEG_RE = re.compile(r".\.[jJ][pP][eE]?[gG]$")
 
-import sdcard  # noqa: E402 - putting this at the top causes an MBEDTLS OOM error!?
 sd_spi = SPI(0,
              sck=Pin(18, Pin.OUT),
              mosi=Pin(19, Pin.OUT),
@@ -56,24 +71,26 @@ uos.mount(sd, SD_MOUNTPOINT)
 gc.collect()
 
 files = list(filter(JPEG_RE.search, uos.listdir(SLIDE_DIR)))
-filename = files[0]
 
 jpeg = jpegdec.JPEG(graphics)
 gc.collect()
 
-while True:
-    for filename in files:
-        graphics.set_pen(1)
-        graphics.clear()
+try:
+    while True:
+        for filename in files:
+            graphics.set_pen(IF_BLACK)
+            graphics.clear()
 
-        jpeg.open_file(SLIDE_DIR + "/" + filename)
-        jpeg.decode()
+            jpeg.open_file(SLIDE_DIR + "/" + filename)
+            jpeg.decode()
 
-        gc.collect()
-        print("START update()", gc.mem_free())
-        graphics.update()
-        print("END update()", gc.mem_free())
+            gc.collect()
+            print("START update()", gc.mem_free())
+            graphics.update()
+            print("END update()", gc.mem_free())
 
-        time.sleep(300)
+            time.sleep(IMAGE_PAUSE)
+except Exception as ex:  ### pylint: disable=broad-except
+    print("Unexpected exception:", repr(ex))
 
 uos.unmount(SD_MOUNTPOINT)
