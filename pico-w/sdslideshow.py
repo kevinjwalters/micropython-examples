@@ -1,4 +1,4 @@
-### sdslideshow.py v1.0
+### sdslideshow.py v1.1
 ### Slide show of jpeg files on microSD card
 
 ### Tested with Inky Frame and Pimoroni MicroPython v1.19.3
@@ -31,6 +31,11 @@
 ### TODO - use two buttons to jump forward and back
 ### TODO - use button to select different modes
 ### TODO - add index file to order the slideshow
+### TODO - add battery power detection and on-screen low batt warning
+
+### Pimoroni have their own slide show program
+### https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/inky_frame/image_gallery
+
 
 import gc
 import re
@@ -66,8 +71,19 @@ sd_spi = SPI(0,
              sck=Pin(18, Pin.OUT),
              mosi=Pin(19, Pin.OUT),
              miso=Pin(16, Pin.OUT))
-sd = sdcard.SDCard(sd_spi, Pin(22))
-uos.mount(sd, SD_MOUNTPOINT)
+sd = None
+last_exception = None
+### First one often fails at power up
+for _ in range(15):
+    try:
+        sd = sdcard.SDCard(sd_spi, Pin(22))
+        uos.mount(sd, SD_MOUNTPOINT)
+        break
+    except OSError as ex:
+        last_exception = ex
+    time.sleep(4)
+if sd is None:
+    raise last_exception
 gc.collect()
 
 files = list(filter(JPEG_RE.search, uos.listdir(SLIDE_DIR)))
