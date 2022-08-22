@@ -34,8 +34,13 @@
 ### TODO - add battery power detection and on-screen low batt warning
 ### TODO - work out if Inky Frame hardware is capable of running code
 ###        at battery power up if no rtc wakeup timer is configured
+### TODO - are there any risks with leaving sd card mounted?
+###        any write caching?
 ### TODO - alternate mode for using (8bit) spare register on rtc (PCF85063A)
-###        for current slide number
+###        for current slide number OR perhaps this could be used to
+###        determine device is still battery powered and on when reawakening
+### TODO - make SLIDE_INTROFILE optional and display a text version without it
+
 ### Pimoroni have their own slide show program
 ### https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/inky_frame/image_gallery
 
@@ -57,6 +62,8 @@ IF_VBUS = 'WL_GPIO2'
 from machine import Pin, SPI, PWM, ADC
 
 ### Set VSYS hold high to stay awake
+### It may be beneficial (??) to set this as early as possible in the code
+### https://forums.pimoroni.com/t/inky-frame-deep-sleep-explanation/19965
 hold_vsys_en_pin = Pin(IF_HOLD_VSYS_EN_PIN, Pin.OUT, value=True)
 
 from pimoroni import ShiftRegister
