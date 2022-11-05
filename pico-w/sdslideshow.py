@@ -1,4 +1,4 @@
-### sdslideshow.py v1.5
+### sdslideshow.py v1.6
 ### Slide show of jpeg files on microSD card's slides directory
 
 ### Tested with Inky Frame and Pimoroni MicroPython v1.19.6
@@ -34,13 +34,10 @@
 ### TODO - add battery power detection and on-screen low batt warning
 ### TODO - work out if Inky Frame hardware is capable of running code
 ###        at battery power up if no rtc wakeup timer is configured
-### TODO - are there any risks with leaving sd card mounted?
-###        any write caching?
 ### TODO - alternate mode for using (8bit) spare register on rtc (PCF85063A)
-###        for current slide number OR perhaps this could be used to
-###        determine device is still battery powered and on when reawakening
-### TODO - make SLIDE_INTROFILE optional and display a text version without it
-
+###        for current slide number
+### TODO - recursive slide image search?
+### TODO - work out if Inky Frames have a consistent RTC clock speed error
 ### Pimoroni have their own slide show program
 ### https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/inky_frame/image_gallery
 
@@ -62,8 +59,6 @@ IF_VBUS = 'WL_GPIO2'
 from machine import Pin, SPI, PWM, ADC
 
 ### Set VSYS hold high to stay awake
-### It may be beneficial (??) to set this as early as possible in the code
-### https://forums.pimoroni.com/t/inky-frame-deep-sleep-explanation/19965
 hold_vsys_en_pin = Pin(IF_HOLD_VSYS_EN_PIN, Pin.OUT, value=True)
 
 from pimoroni import ShiftRegister
@@ -162,8 +157,29 @@ if sd is None:
     raise last_exception
 gc.collect()
 
-files = list(filter(JPEG_RE.search, uos.listdir(SLIDE_DIR)))
-num_images = len(files)
+
+def count_images(sdir):
+    count = 0
+    ### Iterating over filter + ilistdir results here in hope
+    ### of using less memory than listdir approach
+    for fileinfo in uos.ilistdir(sdir):
+        if JPEG_RE.search(fileinfo[0]):
+            count += 1
+    return count
+
+
+def image_filename(sdir, slide_idx, prefixed=True):
+    s_idx = 1
+    for fileinfo in uos.ilistdir(sdir):
+        fname = fileinfo[0]
+        if JPEG_RE.search(fname):
+            if s_idx == slide_idx:
+                return sdir + "/" + fname if prefixed else fname
+            s_idx += 1
+    return None
+
+
+num_images = count_images(SLIDE_DIR)
 
 idx = None
 try:
@@ -197,17 +213,21 @@ try:
         elif buttons & IF_BUTTON_A:
             idx -= 1
         elif buttons & IF_BUTTON_E:
-            show_intro = True
+            show_intro = not show_intro
         else:
             idx += 1  ### button B or time passes
 
         if not 1 <= idx <= num_images:
             idx = 1
 
-        filename = SLIDE_INTROFILE if show_intro else SLIDE_DIR + "/" + files[idx - 1]
+        ### TODO: something if this comes back None
+        filename = SLIDE_INTROFILE if show_intro else image_filename(SLIDE_DIR, idx)
 
         graphics.set_pen(IF_BLACK)
         graphics.clear()  ### clear is really a fill using set_pen() colour
+
+        if debug >= 1:
+            print("Decoding", filename, idx, "of", num_images)
 
         jpeg.open_file(filename)
         jpeg.decode()
@@ -241,7 +261,7 @@ try:
         ### Indicate going to sleep
         ##led_c.duty_u16(32768)
 
-        ### Changes at 146 seconds for 3 and 55 at for at 1/60Hz (on USB power)
+        ### Changes at 146 seconds for 3m and 55 at for 60s at 1/60Hz (on USB power)
         if IMAGE_PAUSE <= 255:
             rtc.set_timer(IMAGE_PAUSE)   ### defaults to 1Hz
         else:
