@@ -1,4 +1,4 @@
-### sdslideshow.py v1.6
+### sdslideshow.py v1.7
 ### Slide show of jpeg files on microSD card's slides directory
 
 ### Tested with Inky Frame and Pimoroni MicroPython v1.19.6
@@ -38,6 +38,8 @@
 ###        for current slide number
 ### TODO - recursive slide image search?
 ### TODO - work out if Inky Frames have a consistent RTC clock speed error
+### TODO - could put exceptions on display where possible
+### TODO - offer text based instructions maybe via introduction.txt
 ### Pimoroni have their own slide show program
 ### https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/inky_frame/image_gallery
 
@@ -45,6 +47,8 @@
 IF_HOLD_VSYS_EN_PIN = 2
 IF_I2C_SDA_PIN = 4
 IF_I2C_SCL_PIN = 5
+IF_LED_ACTIVITY = 6
+IF_LED_CONNECT = 7
 IF_SR_CLOCK = 8
 IF_SR_LATCH = 9
 IF_SR_OUT = 10
@@ -66,17 +70,6 @@ from pimoroni import ShiftRegister
 button_sr = ShiftRegister(IF_SR_CLOCK, IF_SR_LATCH, IF_SR_OUT)
 poweron_buttons = button_sr.read()
 
-##led_a = PWM(Pin(IF_LED_A))
-##led_a.freq(8)
-##led_a.duty_u16(32768)
-
-##led_b = PWM(Pin(IF_LED_B))
-###led_b.freq(1000)
-##led_b.duty_u16(65535)
-
-##led_c = PWM(Pin(IF_LED_C))
-##led_c.freq(8)
-
 import gc
 import re
 import time
@@ -89,6 +82,32 @@ from pimoroni_i2c import PimoroniI2C
 from pcf85063a import PCF85063A
 
 import sdcard
+
+gc.collect()
+
+led_brightness = 0.4
+leds_pwm = {IF_LED_ACTIVITY: PWM(Pin(IF_LED_ACTIVITY)),
+            IF_LED_CONNECT: PWM(Pin(IF_LED_CONNECT)),
+            IF_LED_A: PWM(Pin(IF_LED_A)),
+            IF_LED_B: PWM(Pin(IF_LED_B)),
+            IF_LED_C: PWM(Pin(IF_LED_C)),
+            IF_LED_D: PWM(Pin(IF_LED_D)),
+            IF_LED_E: PWM(Pin(IF_LED_E))}
+
+def set_led(led, brightness=1, duration=0, flicker=None):
+    """Set led brightness with optional pause and flicker frequency."""
+
+    ### 65535 looks off for some reason??
+    leds_pwm[led].duty_u16(round(brightness * 65534))
+
+    ### min frequency is 8Hz, 1907 is default
+    if flicker is not None:
+        leds_pwm[led].freq(max(8, flicker if flicker != 0 else 1907))
+
+    if duration:
+        time.sleep(duration)
+        leds_pwm[led].duty_u16(0)
+
 
 gc.collect()
 graphics = PicoGraphics(DISPLAY)
@@ -158,23 +177,23 @@ if sd is None:
 gc.collect()
 
 
-def count_images(sdir):
+def count_images(slide_dir):
     count = 0
     ### Iterating over filter + ilistdir results here in hope
     ### of using less memory than listdir approach
-    for fileinfo in uos.ilistdir(sdir):
+    for fileinfo in uos.ilistdir(slide_dir):
         if JPEG_RE.search(fileinfo[0]):
             count += 1
     return count
 
 
-def image_filename(sdir, slide_idx, prefixed=True):
+def image_filename(slide_dir, slide_idx, prefixed=True):
     s_idx = 1
-    for fileinfo in uos.ilistdir(sdir):
-        fname = fileinfo[0]
-        if JPEG_RE.search(fname):
+    for fileinfo in uos.ilistdir(slide_dir):
+        filename = fileinfo[0]
+        if JPEG_RE.search(filename):
             if s_idx == slide_idx:
-                return sdir + "/" + fname if prefixed else fname
+                return slide_dir + "/" + filename if prefixed else filename
             s_idx += 1
     return None
 
@@ -196,8 +215,6 @@ gc.collect()
 show_intro = False
 try:
     while True:
-        ##led_c.duty_u16(0)
-
         buttons = button_sr.read()
         if poweron_buttons is not None:
             ### OR the button values with values at power up
@@ -208,30 +225,41 @@ try:
         if debug >= 1:
             print("SR", "0b{:08b}".format(buttons))
 
+        button_ack = None
         if idx is None or buttons & IF_BUTTON_C:
             idx = 1
+            button_ack = IF_LED_C
         elif buttons & IF_BUTTON_A:
             idx -= 1
+            button_ack = IF_LED_A
         elif buttons & IF_BUTTON_E:
-            show_intro = not show_intro
+            show_intro = not show_intro  ### TODO fix this
+            button_ack = IF_LED_E
         else:
             idx += 1  ### button B or time passes
+            if buttons & IF_BUTTON_B:
+                button_ack = IF_LED_B
+
+        ### Give user some feedback that button press has registered
+        if button_ack is not None:
+            set_led(button_ack, led_brightness, 0.3)
 
         if not 1 <= idx <= num_images:
             idx = 1
 
         ### TODO: something if this comes back None
-        filename = SLIDE_INTROFILE if show_intro else image_filename(SLIDE_DIR, idx)
+        jpeg_filename = SLIDE_INTROFILE if show_intro else image_filename(SLIDE_DIR, idx)
 
         graphics.set_pen(IF_BLACK)
         graphics.clear()  ### clear is really a fill using set_pen() colour
 
         if debug >= 1:
-            print("Decoding", filename, idx, "of", num_images)
+            print("Decoding", jpeg_filename, idx, "of", num_images)
 
-        jpeg.open_file(filename)
+        set_led(IF_LED_ACTIVITY, led_brightness / 3, 0, 20)
+        jpeg.open_file(jpeg_filename)
         jpeg.decode()
-
+        set_led(IF_LED_ACTIVITY, 0, 0, 0)
         show_intro = False
 
         ### https://gist.github.com/helgibbons/3ce1a3b6eb24ca6f27a66455caba9809
@@ -245,18 +273,22 @@ try:
                 graphics.text('{:.2f}'.format(batt_v()) + "v", *debug_text_pos)
 
         gc.collect()
+        set_led(IF_LED_ACTIVITY, led_brightness / 4, 0, 8)
         if debug >=1:
             print("START update()", gc.mem_free(), idx)
         graphics.update()
         if debug >= 1:
             print("END update()", gc.mem_free(), idx)
+        set_led(IF_LED_ACTIVITY, 0, 0, 0)
 
         ### Write idx of current image to a file on sd card
+        set_led(IF_LED_ACTIVITY, led_brightness)
         try:
             with open(SLIDE_CURFILE, "wt") as fh:
                 fh.write("{:d}\n".format(idx))
         except OSError:
             pass
+        set_led(IF_LED_ACTIVITY, 0)
 
         ### Indicate going to sleep
         ##led_c.duty_u16(32768)
@@ -280,7 +312,8 @@ try:
 
         ### This will only be reached on USB power
         time.sleep(IMAGE_PAUSE)
-except Exception as ex:  ### pylint: disable=broad-except
+##except Exception as ex:  ### pylint: disable=broad-except
+except IndexError as ex:
     print("Unexpected exception:", repr(ex))
 
 uos.umount(SD_MOUNTPOINT)
