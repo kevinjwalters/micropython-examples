@@ -1,4 +1,4 @@
-### sdslideshow.py v1.7
+### sdslideshow.py v1.8
 ### Slide show of jpeg files on microSD card's slides directory
 
 ### Tested with Inky Frame and Pimoroni MicroPython v1.19.6
@@ -114,6 +114,7 @@ graphics = PicoGraphics(DISPLAY)
 gc.collect()
 
 debug = 0
+debug = 5
 
 batt_v_adc = ADC(IF_VSYS_DIV3)
 def batt_v():
@@ -215,6 +216,7 @@ gc.collect()
 show_intro = False
 try:
     while True:
+        advance_forwards = True
         buttons = button_sr.read()
         if poweron_buttons is not None:
             ### OR the button values with values at power up
@@ -231,6 +233,7 @@ try:
             button_ack = IF_LED_C
         elif buttons & IF_BUTTON_A:
             idx -= 1
+            advance_forwards = False
             button_ack = IF_LED_A
         elif buttons & IF_BUTTON_E:
             show_intro = not show_intro  ### TODO fix this
@@ -240,25 +243,47 @@ try:
             if buttons & IF_BUTTON_B:
                 button_ack = IF_LED_B
 
+        if not 1 <= idx <= num_images:
+            idx = 1 if advance_forwards else num_images
+
         ### Give user some feedback that button press has registered
         if button_ack is not None:
             set_led(button_ack, led_brightness, 0.3)
 
-        if not 1 <= idx <= num_images:
-            idx = 1
-
-        ### TODO: something if this comes back None
-        jpeg_filename = SLIDE_INTROFILE if show_intro else image_filename(SLIDE_DIR, idx)
-
         graphics.set_pen(IF_BLACK)
         graphics.clear()  ### clear is really a fill using set_pen() colour
 
-        if debug >= 1:
-            print("Decoding", jpeg_filename, idx, "of", num_images)
-
         set_led(IF_LED_ACTIVITY, led_brightness / 3, 0, 20)
-        jpeg.open_file(jpeg_filename)
-        jpeg.decode()
+        attempts = 0
+        while attempts < num_images:
+            ### TODO: something if this comes back None
+            jpeg_filename = SLIDE_INTROFILE if show_intro else image_filename(SLIDE_DIR, idx)
+
+            if debug >= 1:
+                print("Decoding", jpeg_filename, idx, "of", num_images)
+
+            try:
+                jpeg.open_file(jpeg_filename)
+                ### Progressive jpeg file throws
+                ### RuntimeError: JPEG: could not read file/buffer.
+                jpeg.decode()
+            except RuntimeError as ex:
+                print("Skipping", jpeg_filename, "due to", repr(ex))
+                if show_intro:
+                    raise ex
+                if advance_forwards:
+                    idx += 1
+                    if idx > num_images:
+                        idx = 1
+                else:
+                    idx -= 1
+                    if idx < 1:
+                        idx = num_images
+                attempts += 1
+                continue
+
+            break
+
         set_led(IF_LED_ACTIVITY, 0, 0, 0)
         show_intro = False
 
@@ -312,8 +337,13 @@ try:
 
         ### This will only be reached on USB power
         time.sleep(IMAGE_PAUSE)
+
 ##except Exception as ex:  ### pylint: disable=broad-except
 except IndexError as ex:
     print("Unexpected exception:", repr(ex))
 
 uos.umount(SD_MOUNTPOINT)
+
+### On battery power changing this pin to a read will shutdown RP2040
+### This is required if there's an exception to avoid wasting battery
+hold_vsys_en_pin.init(Pin.IN)
