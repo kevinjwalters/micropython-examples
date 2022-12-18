@@ -1,7 +1,7 @@
-### sdslideshow.py v1.8
+### sdslideshow.py v1.9
 ### Slide show of jpeg files on microSD card's slides directory
 
-### Tested with Inky Frame and Pimoroni MicroPython v1.19.6
+### Tested with Inky Frame and Pimoroni MicroPython v1.19.6 and v1.19.10
 
 ### copy this file to Inky Frame as main.py
 
@@ -26,6 +26,12 @@
 ### LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 ### OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ### SOFTWARE.
+
+
+### Instructables article using this program
+###
+### https://www.instructables.com/Battery-Powered-Digital-Picture-Frame-Using-Pimoro/
+
 
 ### TODO - use button to select different modes
 ### TODO - acknowledge button presses with brief low power flash of LED
@@ -68,7 +74,7 @@ hold_vsys_en_pin = Pin(IF_HOLD_VSYS_EN_PIN, Pin.OUT, value=True)
 from pimoroni import ShiftRegister
 ### Button state appears in a shift register apparently
 button_sr = ShiftRegister(IF_SR_CLOCK, IF_SR_LATCH, IF_SR_OUT)
-poweron_buttons = button_sr.read()
+previous_buttons = button_sr.read()
 
 import gc
 import re
@@ -97,7 +103,7 @@ leds_pwm = {IF_LED_ACTIVITY: PWM(Pin(IF_LED_ACTIVITY)),
 def set_led(led, brightness=1, duration=0, flicker=None):
     """Set led brightness with optional pause and flicker frequency."""
 
-    ### 65535 looks off for some reason??
+    ### led goes off with 65535 for some reason??
     leds_pwm[led].duty_u16(round(brightness * 65534))
 
     ### min frequency is 8Hz, 1907 is default
@@ -114,7 +120,6 @@ graphics = PicoGraphics(DISPLAY)
 gc.collect()
 
 debug = 0
-debug = 5
 
 batt_v_adc = ADC(IF_VSYS_DIV3)
 def batt_v():
@@ -148,6 +153,7 @@ IF_BUTTON_B = 1 << 1
 IF_BUTTON_C = 1 << 2
 IF_BUTTON_D = 1 << 3
 IF_BUTTON_E = 1 << 4
+IF_BUTTONS = IF_BUTTON_A | IF_BUTTON_B | IF_BUTTON_C | IF_BUTTON_D | IF_BUTTON_E
 IF_RTC_ALARM = 1 << 5
 IF_EXTERNAL_TRIGGER = 1 << 6
 IF_EINK_BUSY = 1 << 7
@@ -218,11 +224,11 @@ try:
     while True:
         advance_forwards = True
         buttons = button_sr.read()
-        if poweron_buttons is not None:
+        if previous_buttons is not None:
             ### OR the button values with values at power up
             ### to try to catch brief button presses
-            buttons |= poweron_buttons
-            poweron_buttons = None
+            buttons |= previous_buttons
+            previous_buttons = None
 
         if debug >= 1:
             print("SR", "0b{:08b}".format(buttons))
@@ -266,6 +272,7 @@ try:
                 jpeg.open_file(jpeg_filename)
                 ### Progressive jpeg file throws
                 ### RuntimeError: JPEG: could not read file/buffer.
+                ### Also happens on a q98 jpeg but not the q92 version of it
                 jpeg.decode()
             except RuntimeError as ex:
                 print("Skipping", jpeg_filename, "due to", repr(ex))
@@ -288,6 +295,7 @@ try:
         show_intro = False
 
         ### https://gist.github.com/helgibbons/3ce1a3b6eb24ca6f27a66455caba9809
+        ### vbus.value() is often wrong and it takes 1044-1090ms
         if debug >= 2:
             debug_text_pos = (20, 360, 600 - 2 * 20, 6)
             if vbus.value():
@@ -336,10 +344,14 @@ try:
         ##    pass
 
         ### This will only be reached on USB power
-        time.sleep(IMAGE_PAUSE)
+        start_pause_ms = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), start_pause_ms) < IMAGE_PAUSE * 1000:
+            previous_buttons = button_sr.read()
+            if previous_buttons & (IF_BUTTONS | IF_EXTERNAL_TRIGGER):
+                break
 
-##except Exception as ex:  ### pylint: disable=broad-except
-except IndexError as ex:
+except Exception as ex:  ### pylint: disable=broad-except
+##except IndexError as ex:
     print("Unexpected exception:", repr(ex))
 
 uos.umount(SD_MOUNTPOINT)
@@ -347,3 +359,6 @@ uos.umount(SD_MOUNTPOINT)
 ### On battery power changing this pin to a read will shutdown RP2040
 ### This is required if there's an exception to avoid wasting battery
 hold_vsys_en_pin.init(Pin.IN)
+### Sleep to allow Inky Frame to go into deep sleep mode in case MicroPython
+### does anything now or in the future with GPIO state when program finishes
+time.sleep(2)
