@@ -1,4 +1,4 @@
-### sdslideshow.py v1.9
+### sdslideshow.py v1.10
 ### Slide show of jpeg files on microSD card's slides directory
 
 ### Tested with Inky Frame and Pimoroni MicroPython v1.19.6 and v1.19.10
@@ -49,6 +49,13 @@
 ### Pimoroni have their own slide show program
 ### https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/inky_frame/image_gallery
 
+### Configuration
+
+### 3.7 works for LiPo and probably 3 zinc-carbon/alkaline too
+LOW_BATT_V = 3.7
+##LOW_BATT_V = None  ### set to None to disable on-screen warning
+
+
 ### Inky Frame pins
 IF_HOLD_VSYS_EN_PIN = 2
 IF_I2C_SDA_PIN = 4
@@ -65,6 +72,21 @@ IF_LED_D = 14
 IF_LED_E = 15
 IF_VSYS_DIV3 = 29
 IF_VBUS = 'WL_GPIO2'
+
+### Inky Frame display dimensions
+IF_WIDTH = 600
+IF_HEIGHT = 448
+
+### Inky Frame colours
+IF_BLACK = 0
+IF_WHITE = 1
+IF_GREEN = 2
+IF_BLUE = 3
+IF_RED = 4
+IF_YELLOW = 5
+IF_ORANGE = 6
+IF_TAUPE = 7
+
 
 from machine import Pin, SPI, PWM, ADC
 
@@ -121,10 +143,33 @@ gc.collect()
 
 debug = 0
 
+batt_v_pin = Pin(IF_VSYS_DIV3)
 batt_v_adc = ADC(IF_VSYS_DIV3)
-def batt_v():
-    return batt_v_adc.read_u16() * (3 * 3.3 / 65535)
+def batt_v(samples=100):
+    total = 0
+    ### Trying half of suggestion from
+    ### https://forums.raspberrypi.com/viewtopic.php?p=2063326
+    batt_v_pin.init(Pin.IN)
+    for _ in range(samples):
+        total += batt_v_adc.read_u16()
+    return total * (3 * 3.3 / 65535) / samples
 vbus = Pin(IF_VBUS, Pin.IN)
+
+def add_text(text, x=20, y=IF_HEIGHT-(8+2)*8, color=IF_WHITE, scale=8,
+             *,
+             outline=None, font='bitmap8'):
+    graphics.set_font(font)
+
+    if outline is not None:
+        graphics.set_pen(outline)
+        for off_x, off_y in ((-scale, -scale), (0, -scale), (scale, -scale),
+                             (-scale, 0), (scale, 0),
+                             (-scale, scale), (0, scale), (scale, scale)):
+            width = IF_WIDTH - 2 * (x + off_x)
+            graphics.text(text, x + off_x, y + off_y, width, scale)
+    graphics.set_pen(color)
+    width = IF_WIDTH - 2 * x
+    graphics.text(text, x, y, width, scale)
 
 
 IMAGE_PAUSE = 4 * 60 * 60
@@ -135,17 +180,6 @@ SLIDE_DIR = SD_MOUNTPOINT + "/slides"
 SLIDE_INTROFILE = SD_MOUNTPOINT + "/introduction.jpg"
 SLIDE_CURFILE = SLIDE_DIR + "/slide.cur"
 JPEG_RE = re.compile(r".\.[jJ][pP][eE]?[gG]$")
-
-
-### Inky Frame colours
-IF_BLACK = 0
-IF_WHITE = 1
-IF_GREEN = 2
-IF_BLUE = 3
-IF_RED = 4
-IF_YELLOW = 5
-IF_ORANGE = 6
-IF_TAUPE = 7
 
 ### Inky Frame bit mask for buttons and wake events
 IF_BUTTON_A = 1 << 0
@@ -275,7 +309,9 @@ try:
                 ### Also happens on a q98 jpeg but not the q92 version of it
                 jpeg.decode()
             except RuntimeError as ex:
-                print("Skipping", jpeg_filename, "due to", repr(ex))
+                print("Skipping", jpeg_filename,
+                      "due to [", repr(ex),
+                      "] this may be a progressive JPEG")
                 if show_intro:
                     raise ex
                 if advance_forwards:
@@ -295,15 +331,19 @@ try:
         show_intro = False
 
         ### https://gist.github.com/helgibbons/3ce1a3b6eb24ca6f27a66455caba9809
-        ### vbus.value() is often wrong and it takes 1044-1090ms
-        if debug >= 2:
-            debug_text_pos = (20, 360, 600 - 2 * 20, 6)
-            if vbus.value():
-                graphics.set_pen(IF_BLUE)
-                graphics.text('USB power', *debug_text_pos)
-            else:
-                graphics.set_pen(IF_GREEN)
-                graphics.text('{:.2f}'.format(batt_v()) + "v", *debug_text_pos)
+        ### vbus.value() is often wrong and it takes 1044-1090ms (?!)
+        ##if debug >= 2:
+        ##    debug_text_pos = (20, 360, 600 - 2 * 20, 6)
+        ##    if vbus.value():
+        ##        graphics.set_pen(IF_BLUE)
+        ##        graphics.text('USB power', *debug_text_pos)
+        ##    else:
+        ##        graphics.set_pen(IF_GREEN)
+        ##        graphics.text('{:.2f}'.format(batt_v()) + "v", *debug_text_pos)
+        usb_power_iffy = vbus.value()
+        volts = batt_v()
+        if  LOW_BATT_V is not None and volts <= LOW_BATT_V:
+            add_text("Low batt: {:.2f}V".format(volts), color=IF_RED, outline=IF_BLACK)
 
         gc.collect()
         set_led(IF_LED_ACTIVITY, led_brightness / 4, 0, 8)
