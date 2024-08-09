@@ -1,10 +1,7 @@
-### peripheral-power-test v1.0
-
+### peripheral-power-test v1.2
 ### Peripheral power test
 
-###
-
-### Copy this file to Pi Pico or Feather nRF52840 Express board as code.py
+### Copy this https://python.microbit.org/ to send to micro:bit V1 or V2
 
 ### MIT License
 
@@ -30,6 +27,7 @@
 
 ### Other "ports"
 ### https://github.com/kevinjwalters/arduino-examples/blob/master/uno/peripheral-power-test/peripheral-power-test.ino
+### https://github.com/kevinjwalters/circuitpython-examples/blob/master/pico/peripheral-power-test.py
 
 
 import os
@@ -72,10 +70,10 @@ class Servo:
 
 machine = os.uname().machine
 if "nRF51822" in machine:
-    HARDWARE="V1"
+    HARDWARE = "V1"
     RGBPIXLIM = 3
 else:
-    HARDWARE="V2"
+    HARDWARE = "V2"
     RGBPIXLIM = 12  ### drops from 3.28V to 2.87V
 
 HIGH_PIN = pin0
@@ -103,9 +101,9 @@ myservo = Servo(SERVO_PIN,
                 min_pulse=ARDUINO_MIN_PULSE, max_pulse=ARDUION_MAX_PULSE)
 myservo.turn_off()  ### turn off servo
 
-### Default servo range is 750 to 2250, lower than Arduino default
+### Default servo range is 600 to 2400, slightly narrower than Arduino default
 ### https://docs.circuitpython.org/projects/motor/en/latest/api.html#adafruit_motor.servo.Servo
-
+### https://github.com/kevinjwalters/circuitpython-examples/blob/master/pico/peripheral-power-test.py
 
 def pixels_off():
     for p_idx in range(NUM_PIXELS):
@@ -115,8 +113,8 @@ def pixels_off():
 pixels_off()
 
 while True:
-    ### Flash onboard LED three times to signify start
-    for _ in range(3):
+    ### Flash onboard LED five times to signify start
+    for _ in range(5):
         display.show(Image.HEART)
         time.sleep(1)
         display.clear()
@@ -126,7 +124,7 @@ while True:
     start_pos = SERVO_MIN
     end_pos = SERVO_MAX
     old_start_pos = end_pos
-    degree_step = 1
+    degree_step = 3
     reps = 1
     duration_s = 2
     for idx in range(NUM_PIXELS):
@@ -160,6 +158,7 @@ while True:
         if idx % SERVO_SPEED_LOOPS == SERVO_SPEED_LOOPS - 1:
             if HARDWARE == "V2":
                 reps *= 2
+                degree_step *= 2
 
     ### Test complete
     pixels_off()
