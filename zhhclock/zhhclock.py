@@ -34,10 +34,13 @@
 ### TODO store (magic number, background, mode) in the SRAM of RTC?
 
 ### Controls
-### logo to change mode, this seems obvious.
-### changing mode could leave things running, like stopwatch
-### short logo press to change to new mode
-### long press to change background?
+### Logo (press)
+###   short press to change background, longer press to switch back and forth
+###   to stopwatch, very long press to set the time
+### Button A (left)
+###   start/stop stopwatch, increment value in time set mode
+### Button B (right)
+####  reset stopwatch, alter next parameter in time set mode
 
 
 import gc
@@ -53,14 +56,15 @@ import mcp7940
 from zc_comboclock import ComboClock
 from zc_bg import HaloBackground
 from zc_bg_blank import Blank
-from zc_bg_flag import Flag
-#from zc_bg_rotatingrainbow import RotatingRainbow
-from zc_bg_fallingrainbow import FallingRainbow
-#from zc_bg_digitalrain  import DigitalRain
+from zc_bg_digitalrain  import DigitalRain
 from zc_bg_pendulum  import Pendulum
+#from zc_bg_fallingrainbow import FallingRainbow
+#from zc_bg_rotatingrainbow import RotatingRainbow
 #from zc_bg_brightnesstest import BrightnessTest
 #from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
+from zc_bg_flag import Flag
+
 from zc_utils import HOUR, MINUTE, SECOND
 
 
@@ -81,7 +85,7 @@ except (NameError, AttributeError):
 ### MCP7940 fine trim is multiples of 2 cycles per minute for 32.768kHz crystal
 PPM_TO_TRIM_CONV = 32768 * 60 / (2 * 1000 * 1000)
 
-### Zip Halo HD has 60 RGB LEDs
+### ZIP Halo HD has 60 RGB LEDs
 ZIPCOUNT = 60
 BLACK = (0, 0, 0)
 MCP_POR_TIME = (2000, 1, 1, 0, 0, 0, 0, 0)
@@ -90,6 +94,7 @@ VERY_LONG_PRESS_DURATION_MS = 2000
 LONG_PRESS_DURATION_MS = 1000
 SHORT_PRESS_DURATION_MS = 175
 PAUSE_AFTER_BUTTON_MS = 200
+
 
 ### MicroPython on micro:bit does not have these methods used by MCP7940
 class EnhancedI2C:
@@ -116,8 +121,6 @@ zip_px = neopixel.NeoPixel(pin8, ZIPCOUNT)
 zip_px.fill(BLACK)
 zip_px.show()
 
-if False:
-    sleep(35 * 1000)
 
 display_image = [0] * (5 * 5)
 
@@ -132,7 +135,6 @@ def show_display_image():
     display.show(Image(img))
 
 show_display_image()
-
 gc.collect()
 
 ### Remove the current_time setting
@@ -154,21 +156,19 @@ MODE_STOPWATCH = const(1)
 MODE_TIME_SET = const(2)
 
 
-
-background_idx = 1
+background_idx = 0
 background = (Blank(zip_px, display_image),
-              Flag(zip_px, display_image),
-              #RotatingRainbow(zip_px, display_image),
-              FallingRainbow(zip_px, display_image),
-              #DigitalRain(zip_px, display_image),
+              DigitalRain(zip_px, display_image),
               Pendulum(zip_px, display_image),
+              #FallingRainbow(zip_px, display_image),
+              #RotatingRainbow(zip_px, display_image),
+              Flag(zip_px, display_image),
               #BrightnessTest(zip_px, display_image),
               #LarsonScanner(zip_px, display_image),
               #Temperature(zip_px, display_image, {"function": temperature})
               )
 gc.collect()
 
-counter = 0
 bg = background[background_idx]
 bg.start(*clock.time_with_ms_and_ticks)
 bg_displayed = bg.displayed
@@ -280,11 +280,11 @@ while True:
         while threshold > 0.5:
             if mode_idx != MODE_TIME_SET:
                 if utime.ticks_diff(t2_ms, t1_ms) > VERY_LONG_PRESS_DURATION_MS:
-                    new_char = "t"
+                    new_char = "t"  ### [t]ime set
                 elif utime.ticks_diff(t2_ms, t1_ms) > LONG_PRESS_DURATION_MS:
                     new_char = mode[(mode_idx + 1 ) % len(mode)][0]
                 elif utime.ticks_diff(t2_ms, t1_ms) > SHORT_PRESS_DURATION_MS:
-                    new_char = "b"  ### next background
+                    new_char = "b"  ### next [b]ackground
 
             if new_char != d_char:
                 display.show(new_char)
@@ -298,7 +298,6 @@ while True:
             mode_idx = MODE_CLOCK
         elif utime.ticks_diff(t2_ms, t1_ms) < LONG_PRESS_DURATION_MS:
             background_idx = (background_idx + 1 ) % len(background)
-            print("NEWBACKGROUND", background_idx)  ### TODO remove
             bg.stop()
             gc.collect()
             bg = background[background_idx]
@@ -306,9 +305,7 @@ while True:
             bg_displayed = bg.displayed
         elif utime.ticks_diff(t2_ms, t1_ms) < VERY_LONG_PRESS_DURATION_MS:
             mode_idx = (mode_idx + 1 ) % ROTATE_MODES
-            print("NEWMODE", mode_idx)  ### TODO remove
+            gc.collect()
         else:
             mode_idx = MODE_TIME_SET
             time_set_change = HOUR
-
-    counter = counter + 1
