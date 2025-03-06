@@ -96,7 +96,7 @@ class EnhancedI2C:
     def __init__(self, i2c_):
         self._i2c = i2c_
 
-    ### pylint: disable=
+    ### pylint: disable=unused-argument
     def readfrom_mem(self, addr, memaddr, nbytes, *, addrsize=8):
         self._i2c.write(addr, bytes([memaddr]))
         return self._i2c.read(addr, nbytes)
@@ -216,14 +216,15 @@ while True:
         if time_set_change != SECOND or flash_on:
             s_idx = rtc_time[SECOND] * ZIPCOUNT // 60
 
+    ### LEDs vary in brightness, in decr. order green, red, blue
     if h_idx is not None:
-        bri = min(255, zip_px[h_idx][0] + 16) if zip_px[h_idx][0] < 8 else 0
+        bri = min(255, zip_px[h_idx][0] + 14) if zip_px[h_idx][0] < 7 else 0
         zip_px[h_idx] = (bri, zip_px[h_idx][1], zip_px[h_idx][2])
     if m_idx is not None:
-        bri = min(255, zip_px[m_idx][1] + 16) if zip_px[m_idx][1] < 8 else 0
+        bri = min(255, zip_px[m_idx][1] + 8) if zip_px[m_idx][1] < 4 else 0
         zip_px[m_idx] = (zip_px[m_idx][0], bri, zip_px[m_idx][2])
     if s_idx is not None:
-        bri = min(255, zip_px[s_idx][2] + 16) if zip_px[s_idx][2] < 8 else 0
+        bri = min(255, zip_px[s_idx][2] + 24) if zip_px[s_idx][2] < 12 else 0
         zip_px[s_idx] = (zip_px[s_idx][0], zip_px[s_idx][1], bri)
     if ms_idx is not None:
         bri = (min(255, zip_px[ms_idx][0] + 32 if clock.stopwatch_running else 24) if zip_px[ms_idx][0] < 8 else 0)
@@ -236,6 +237,7 @@ while True:
         show_display_image()
     zip_px.show()
 
+    ### Check for button and logo presses
     if button_b.get_presses():
         wait = False
         if mode_idx == MODE_STOPWATCH and not clock.stopwatch_running:
@@ -308,11 +310,5 @@ while True:
         else:
             mode_idx = MODE_TIME_SET
             time_set_change = HOUR
-
-        ### TODO - is this still needed?
-        #sleep(PAUSE_AFTER_BUTTON_MS)  ### 200ms to stop another subsequent mode change
-
-    ### TODO - do i need a min loop time?
-    ## sleep(180)
 
     counter = counter + 1
