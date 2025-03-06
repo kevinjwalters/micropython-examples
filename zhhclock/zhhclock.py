@@ -221,10 +221,10 @@ while True:
         bri = min(255, zip_px[h_idx][0] + 14) if zip_px[h_idx][0] < 7 else 0
         zip_px[h_idx] = (bri, zip_px[h_idx][1], zip_px[h_idx][2])
     if m_idx is not None:
-        bri = min(255, zip_px[m_idx][1] + 8) if zip_px[m_idx][1] < 4 else 0
+        bri = min(255, zip_px[m_idx][1] + 10) if zip_px[m_idx][1] < 4 else 0
         zip_px[m_idx] = (zip_px[m_idx][0], bri, zip_px[m_idx][2])
     if s_idx is not None:
-        bri = min(255, zip_px[s_idx][2] + 24) if zip_px[s_idx][2] < 12 else 0
+        bri = min(255, zip_px[s_idx][2] + 20) if zip_px[s_idx][2] < 10 else 0
         zip_px[s_idx] = (zip_px[s_idx][0], zip_px[s_idx][1], bri)
     if ms_idx is not None:
         bri = (min(255, zip_px[ms_idx][0] + 32 if clock.stopwatch_running else 24) if zip_px[ms_idx][0] < 8 else 0)
