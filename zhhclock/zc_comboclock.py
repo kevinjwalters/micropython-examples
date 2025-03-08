@@ -16,8 +16,8 @@ class ComboClock:
                  current_time=None):
         self._rtc = rtc
 
-        rtc_trim_value = round((0.0 - rtc_clock_drift_ppm) * rtc_trim_conv)
-        if rtc_trim_value != 0:
+        if rtc_clock_drift_ppm is not None:
+            rtc_trim_value = round((0.0 - rtc_clock_drift_ppm) * rtc_trim_conv)
             print("TRIM", rtc_trim_value)
             self._rtc.set_trim(rtc_trim_value)
 
