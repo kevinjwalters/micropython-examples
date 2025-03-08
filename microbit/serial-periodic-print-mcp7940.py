@@ -1,4 +1,4 @@
-### serial-periodic-print-mcp9740 v1.1
+### serial-periodic-print-mcp9740 v1.2
 
 ### copy this file to BBC micro:bit V2 as main.py
 
@@ -32,24 +32,24 @@ import mcp7940
 from microbit import i2c
 from utime import ticks_us, ticks_diff, ticks_add
 
-## PERIOD_US = 60 * 60 * 1000 * 1000
+### This will work for up to 6 minutes with ticks_us/ticks_diff
+PERIOD_US = 6 * 60 * 1000 * 1000
 ## PERIOD_US = 10 * 1000 * 1000
-PERIOD_US = 1 * 1000 * 1000
-
+##PERIOD_US = 1 * 1000 * 1000
 
 class EnhancedI2C:
-    def __init__(self, i2c):
-        self._i2c = i2c
+    def __init__(self, i2c_):
+        self._i2c = i2c_
 
     def readfrom_mem(self, addr, memaddr, nbytes, *, addrsize=8):
-        i2c.write(addr, bytes([memaddr]))
-        return(i2c.read(addr, nbytes))
+        self._i2c.write(addr, bytes([memaddr]))
+        return self._i2c.read(addr, nbytes)
 
     def readfrom_mem_into(self, addr, memaddr, buf, *, addrsize=8):
         raise NotImplementedError
-    
+
     def writeto_mem(self, addr, memaddr, buf, *, addrsize=8):
-        i2c.write(addr, bytes([memaddr]) + buf)
+        self._i2c.write(addr, bytes([memaddr]) + buf)
 
 
 ei2c = EnhancedI2C(i2c)
@@ -60,11 +60,11 @@ mcp.start()
 
 last_print_us = None
 timestamp_us = None
-uncollected = True
+uncollected = False
 
 gc.collect()
 last_print_us = ticks_us()
-while True:    
+while True:
     timestamp_us = ticks_us()
     if ticks_diff(timestamp_us, last_print_us) >= PERIOD_US:
         print(timestamp_us, ticks_us(), *mcp.time, sep=",")
