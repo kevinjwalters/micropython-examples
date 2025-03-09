@@ -54,7 +54,6 @@ import utime
 import mcp7940
 
 from zc_comboclock import ComboClock
-from zc_bg import HaloBackground
 from zc_bg_blank import Blank
 from zc_bg_digitalrain  import DigitalRain
 from zc_bg_pendulum  import Pendulum
@@ -93,7 +92,6 @@ MCP_POR_TIME = (2000, 1, 1, 0, 0, 0, 0, 0)
 VERY_LONG_PRESS_DURATION_MS = 2000
 LONG_PRESS_DURATION_MS = 1000
 SHORT_PRESS_DURATION_MS = 175
-PAUSE_AFTER_BUTTON_MS = 200
 
 
 ### MicroPython on micro:bit does not have these methods used by MCP7940
@@ -115,7 +113,6 @@ class EnhancedI2C:
 
 ei2c = EnhancedI2C(i2c)
 mcp = mcp7940.MCP7940(ei2c)
-print("MCP", mcp.time)
 
 zip_px = neopixel.NeoPixel(pin8, ZIPCOUNT)
 zip_px.fill(BLACK)
@@ -229,7 +226,7 @@ while True:
     if ms_idx is not None:
         bri = (min(255, zip_px[ms_idx][0] + 32 if clock.stopwatch_running else 24) if zip_px[ms_idx][0] < 8 else 0)
         zip_px[ms_idx] = (bri, zip_px[ms_idx][1], zip_px[ms_idx][2])
-    updates |= HaloBackground.HALO_CHANGED
+    ##updates |= HaloBackground.HALO_CHANGED
 
     if display_char is not None:
         display.show(display_char)
@@ -297,7 +294,7 @@ while True:
             clock.sync_clocks()
             mode_idx = MODE_CLOCK
         elif utime.ticks_diff(t2_ms, t1_ms) < LONG_PRESS_DURATION_MS:
-            background_idx = (background_idx + 1 ) % len(background)
+            background_idx = (background_idx + 1) % len(background)
             bg.stop()
             gc.collect()
             bg = background[background_idx]
