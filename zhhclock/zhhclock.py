@@ -1,4 +1,4 @@
-### zhhlocky.py v1.0
+### zhhlocky.py v1.1
 ### A clock and stopwatch with many backgrounds for Kitronik ZIP Halo HD
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -282,7 +282,7 @@ while True:
                 if utime.ticks_diff(t2_ms, t1_ms) > VERY_LONG_PRESS_DURATION_MS:
                     new_char = "t"  ### [t]ime set
                 elif utime.ticks_diff(t2_ms, t1_ms) > LONG_PRESS_DURATION_MS:
-                    new_char = mode[(mode_idx + 1 ) % len(mode)][0]
+                    new_char = mode[(mode_idx + 1 ) % ROTATE_MODES][0]
                 elif utime.ticks_diff(t2_ms, t1_ms) > SHORT_PRESS_DURATION_MS:
                     new_char = "b"  ### next [b]ackground
 
