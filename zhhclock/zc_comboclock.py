@@ -25,13 +25,13 @@ class ComboClock:
             self._rtc.time = current_time
 
         self._rtc.start()
-        if not self.sync_clocks():
-            raise RuntimeError("Cannot synchronise RTC with MP MB clock")
-
         self._mp_clock_drift_ppm = mp_clock_drift_ppm
         self._conv_ticks_ms = 1.0 - mp_clock_drift_ppm / 1e6 if mp_clock_drift_ppm else 1
         self._last_frac_ms = None
         self._lost_sync = 0
+        self.resync_enabled = True
+        if not self.sync_clocks():
+            raise RuntimeError("Cannot synchronise RTC with MP MB clock")
 
         self.stopwatch_running = False
         self._stopwatch_start = self._stopwatch_stop = self._stopwatch_last = utime.ticks_ms()
@@ -58,14 +58,16 @@ class ComboClock:
 
     @property
     def time_with_ms_and_ticks(self):
-        if self._lost_sync != 0:
-            #print("RESYNC ATTEMPT")
+        if self.resync_enabled and self._lost_sync != 0:
             if self.sync_clocks(20, self._rtc.time):
                 pass
-                #print("RESYNCED!")
 
         rtc_time = self._rtc.time
         now_t_ms = utime.ticks_ms()
+        if not self.resync_enabled:
+            self._last_frac_ms = 0
+            return (rtc_time, self._last_frac_ms, now_t_ms)
+
         since_ms = utime.ticks_diff(now_t_ms, self._sync_time_tms)
         cor_since_ms = round(since_ms * self._conv_ticks_ms)
 

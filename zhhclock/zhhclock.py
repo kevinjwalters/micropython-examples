@@ -118,7 +118,6 @@ zip_px = neopixel.NeoPixel(pin8, ZIPCOUNT)
 zip_px.fill(BLACK)
 zip_px.show()
 
-
 display_image = [0] * (5 * 5)
 
 microbit_bri_conv = 9.0 / 255.0
@@ -134,12 +133,10 @@ def show_display_image():
 show_display_image()
 gc.collect()
 
-### Remove the current_time setting
 clock = ComboClock(mcp,
                    rtc_clock_drift_ppm=THIS_ZHH_RTC_PPM,
                    rtc_trim_conv=PPM_TO_TRIM_CONV,
-                   mp_clock_drift_ppm=THIS_MICROBIT_CLOCK_PPM,
-                   current_time=(2025, 2, 26,  9, 30, 0,  2, 57))
+                   mp_clock_drift_ppm=THIS_MICROBIT_CLOCK_PPM)
 
 stopwatch_hmsms = [0, 0, 0, 0.0]
 
@@ -204,7 +201,7 @@ while True:
         if not (bg_displayed & (1 << SECOND)):
             s_idx = rtc_time[SECOND] * ZIPCOUNT // 60
     elif mode_idx == MODE_TIME_SET:
-        flash_on = ss_ms > 500.0
+        flash_on = (utime.ticks_ms() % 1000) > 300.0
         if time_set_change != HOUR or flash_on:
             h_idx = rtc_time[HOUR] * ZIPCOUNT // 12 % ZIPCOUNT
         display_char = ("p" if rtc_time[HOUR] >= 12 else "a")
@@ -291,6 +288,8 @@ while True:
             threshold = threshold * 0.9 + 0.1 * int(pin_logo.is_touched())
 
         if mode_idx == MODE_TIME_SET:
+            ### Exit time set mode
+            clock.resync_enabled = True
             clock.sync_clocks()
             mode_idx = MODE_CLOCK
         elif utime.ticks_diff(t2_ms, t1_ms) < LONG_PRESS_DURATION_MS:
@@ -306,3 +305,4 @@ while True:
         else:
             mode_idx = MODE_TIME_SET
             time_set_change = HOUR
+            clock.resync_enabled = False
