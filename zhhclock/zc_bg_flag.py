@@ -58,7 +58,7 @@ class Flag(HaloBackground):
                                                                      // len(self._zip)]]
         ### Off substitues for white on top left
         for idx in range(len(self._mdisplaylist)):
-            self._mdisplaylist[idx] = 0 if idx in (0, 5) else 128
+            self._mdisplaylist[idx] = 0 if idx in (0, 5) else 7  ### 7 out of 9
 
         return self.HALO_CHANGED | self.MICROBIT_CHANGED
 
@@ -93,8 +93,8 @@ class Flag(HaloBackground):
                 if idx != tophalf_idx:
                     r, g, b = self._zip[tophalf_idx]
                     self._zip[tophalf_idx] = (min(255, max(0, round(r * col_p1))),
-                                      min(255, max(0, round(g * col_p1))),
-                                      min(255, max(0, round(b * col_p1))))
+                                              min(255, max(0, round(g * col_p1))),
+                                              min(255, max(0, round(b * col_p1))))
 
         if changes_ & self.MICROBIT_CHANGED:
             ### Modulate micro:bit display using values calculated per column
@@ -103,7 +103,7 @@ class Flag(HaloBackground):
                 moving_x = 0 - led_x + shift_x
                 col_p1 = self._wind_ripple_mod(moving_x) / 1.9 + 1.0
                 for y_off in range(0, 25, 5):
-                    self._mdisplaylist[m_idx + y_off] = min(255,
+                    self._mdisplaylist[m_idx + y_off] = min(9,
                                                             max(0,
                                                             round(self._mdisplaylist[m_idx + y_off]
                                                                   * col_p1)))

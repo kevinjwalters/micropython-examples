@@ -99,7 +99,7 @@ class DigitalRain(HaloBackground):
                     brightness = (trail_bri * head_bri
                                   * max(0, (il_radius - distances[0])) / il_radius)
                     if brightness > 0.0:
-                        self._mdisplaylist[m_idx] = max(round(brightness), self._mdisplaylist[m_idx])
+                        self._mdisplaylist[m_idx] = max(round(brightness / 255.0 * 9), self._mdisplaylist[m_idx])
 
         self._last_run_tms = ticks_ms
         ### TODO could count the changes

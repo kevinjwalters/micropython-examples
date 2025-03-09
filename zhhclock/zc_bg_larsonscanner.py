@@ -23,7 +23,7 @@ class LarsonScanner(HaloBackground):
         x3 = x1 - 0.150 * dir
 
         z_bri = 30
-        m_bri = 255
+        m_bri = 9
         il_radius = 0.08
         for x in (x1, x2, x3):
             for p_idx in get_z_pixels_through_x(x):
@@ -37,8 +37,8 @@ class LarsonScanner(HaloBackground):
                 distance = abs(M_LED_POS[m_idx][0] - x)
                 brightness = (max(0, (il_radius - distance)) / il_radius)
                 if brightness > 0.0:
-                    self._mdisplaylist[m_idx] = max(round(brightness * m_bri), self._mdisplaylist[m_idx])
-
+                    self._mdisplaylist[m_idx] = max(round(brightness * m_bri),
+                                                    self._mdisplaylist[m_idx])
             z_bri /= 2
             m_bri /= 2
 

@@ -118,17 +118,9 @@ zip_px = neopixel.NeoPixel(pin8, ZIPCOUNT)
 zip_px.fill(BLACK)
 zip_px.show()
 
-display_image = [0] * (5 * 5)
-
-microbit_bri_conv = 9.0 / 255.0
-ORD_ZERO = ord("0")
+display_image = bytearray(25)   ### values are 0..9
 def show_display_image():
-    ### This converts integer (0..255) array into the MicroPython
-    ### text representation of an image
-    img = ":".join(["".join([chr(ORD_ZERO
-                                 + round(x * microbit_bri_conv))
-                             for x in display_image[0+offset:5+offset]]) for offset in range(0, 25, 5)])
-    display.show(Image(img))
+    display.show(Image(5, 5, display_image))
 
 show_display_image()
 gc.collect()
