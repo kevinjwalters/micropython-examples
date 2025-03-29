@@ -1,4 +1,4 @@
-### neopixel-thirty-bug-repro-8.py v1.0
+### neopixel-thirty-bug-detector-8.py v1.0
 ### A program which reproduces the ZIP LED glitching on the micro:bit V2 with ZIP Halo HD and attempts to pause after one by detected reflected light
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -31,6 +31,8 @@
 
 ### Uses https://github.com/salty-muffin/micropython-mcp7940/blob/master/mcp7940.py
 
+### This is to explore the issue raised in
+### https://github.com/microbit-foundation/micropython-microbit-v2/issues/227
 ### A bright flash is likely to happen every 5-60 minutes
 ### Place 3-4cm away from an A5 piece of paper which should reflect
 ### enough light back to get a reading between 30-120
