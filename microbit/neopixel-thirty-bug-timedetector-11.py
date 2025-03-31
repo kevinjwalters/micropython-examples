@@ -65,7 +65,7 @@ ZIPCOUNT = 60
 BLACK = (0, 0, 0)
 
 ### Estimate of minimum time for a good show() call (2175us for 60)
-SHOW_MIN_US = round((ZIPCOUNT * 3 * 8 + 2 * 50) * 1.25 + ZIPCOUNT * 2 + 130)
+SHOW_MIN_US = round((ZIPCOUNT * 3 * 8 + 2 * 50) * 1.25 + ZIPCOUNT * 2 + 95)
 
 display.clear()
 
