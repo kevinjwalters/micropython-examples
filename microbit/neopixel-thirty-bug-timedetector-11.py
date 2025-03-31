@@ -116,7 +116,7 @@ while True:
         zip_px.show()
         dur_us = ticks_diff(ticks_us(), start_us)
         if dur_us < SHOW_MIN_US:
-            print(PROGRAM, "SLOW")
+            print(PROGRAM, "SLOW", dur_us)
             sleep_s(INSPECTION_PAUSE_S)
 
         #light_lvl_avg = sum([display.read_light_level() for i in range(20)]) / 20.0
