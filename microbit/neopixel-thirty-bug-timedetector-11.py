@@ -46,7 +46,7 @@ import random
 
 from microbit import Image, button_a, button_b, display, i2c, pin1, pin8, pin9, pin_logo, temperature
 import neopixel
-from utime import ticks_ms, ticks_us, ticks_add, ticks_diff, sleep_ms
+from utime import ticks_ms, ticks_us, ticks_add, ticks_diff, sleep_us, sleep_ms
 from utime import sleep as sleep_s
 
 #import mcp7940
@@ -78,9 +78,10 @@ detected_pin = pin9
 start_pin.write_digital(0)
 detected_pin.write_digital(0)
 
+
 def one_ping(pin):
     pin.write_digital(1)
-    sleep_ms(1)
+    sleep_us(400)
     pin.write_digital(0)
 
 
@@ -97,6 +98,7 @@ count = 0
 normal_light_max = 0
 start_us = ticks_us()
 dur_us = 0
+last_d_idx = -1
 while True:
     for col in pattern:
         #zip_px.fill(BLACK)
@@ -110,12 +112,20 @@ while True:
         ### Make an independent copy
         ##zip_copy = [(r, g, b) for r, g, b in zip_px]  ### pylint: disable=unnecessary-comprehension
 
+        d_idx = time_s % 25
+        if d_idx != last_d_idx:
+            display_image[d_idx] = 7
+            display_image[(d_idx - 1) % 25] = 0
+            last_d_idx = d_idx
+
         display.show(Image(5, 5, display_image))
+        #sleep_us(random.randint(0, 400))
         one_ping(start_pin)
         start_us = ticks_us()
         zip_px.show()
         dur_us = ticks_diff(ticks_us(), start_us)
         if dur_us < SHOW_MIN_US:
+            one_ping(detected_pin)
             print(PROGRAM, "SLOW", dur_us)
             sleep_s(INSPECTION_PAUSE_S)
 
@@ -146,6 +156,8 @@ while True:
         elif time_s % 60 == 12:
             print(PROGRAM, "NOGC", ticks_ms(), gc.mem_free())
             sleep_ms(1_000)
+        elif time_s % 60 == 42:
+            sleep_ms(random.randint(1, 66))
 
         count += 1
 
