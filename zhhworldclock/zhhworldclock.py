@@ -1,4 +1,4 @@
-### zhhclockrow.py v1.0
+### zhhclockrow.py v1.1
 ### A clock and stopwatch for multiple clocks synchronised with radio with many backgrounds for Kitronik ZIP Halo HD
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -51,19 +51,21 @@
 
 ### Useful summary of MicroPython timezone blues https://github.com/orgs/micropython/discussions/12378
 
-### TODO still getting 030 errors - find out if this is from failed 
+### TODO still getting 030 errors - find out if this is from failed
 ### heap allocations in CODAL and look for workarounds to minimise this
 
 
 import gc
 
 
-from microbit import Image, button_a, button_b, display, i2c, pin8, pin_logo, temperature
+from microbit import Image, button_a, button_b, display, i2c, pin1, pin8, pin_logo, temperature
 import neopixel
 import radio
 from utime import ticks_ms, ticks_us, ticks_diff, ticks_add, sleep_ms
 
-from mcp7940 import MCP7940
+from mcp7940_tiny import MCP7940
+
+from datecalc import DateCalc
 
 from zc_comboclock import ComboClock
 from zc_clockcomms import ClockComms, MsgTimeWms
@@ -79,10 +81,13 @@ from zc_bg_milliseconds import Milliseconds
 #from zc_bg_temperature import Temperature
 #from zc_bg_flag import Flag
 
-from zc_utils import HOUR, MINUTE, SECOND
-
+from zc_utils import YEAR, MONTH, MDAY, HOUR, MINUTE, SECOND, WEEKDAY
 
 radio.off()   ### the import turns it on
+
+DAY_NAME = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+BASE_YEAR = 2000
+
 
 ### Any TZ offsets are positive for west and negative for east
 cfg = {"CLOCK_PPM": 0.0, "RTC_PPM": 0.0, "NUMBER": 0, "TZ": "GMT"}
@@ -125,6 +130,7 @@ SHORT_DUR_MS = 175
 
 RADIO_TX_MS = 3  ### A guess at time taken to transmit
 
+pin1.set_touch_mode(pin1.CAPACITIVE)
 
 ### MicroPython on micro:bit does not have these methods used by MCP7940
 class EnhancedI2C:
@@ -181,11 +187,16 @@ comms = ClockComms(radio, cfg["NUMBER"])
 stopwatch_hmsms = [0, 0, 0, 0.0]
 
 mode_idx = 0
-mode = (("c", "s", "t"))
+mode = "cst"   ### first character of each mode
 ROTATE_MODES = 2
 CLOCK = 0
 STOPWATCH = 1
 TIME_SET = 2
+
+
+def zip_map(z_idx, count=60):
+    """Map to a ZIP pixel, idx can be a float."""
+    return int(z_idx * ZIPCOUNT // count)
 
 
 background_idx = 0
@@ -232,27 +243,43 @@ while True:
                               time_ms // 60000 % 60,
                               time_ms // 1000 % 60,
                               time_ms % 1000]
-        h_idx = int(stopwatch_hmsms[0]) * ZIPCOUNT // 12 % ZIPCOUNT
-        m_idx = int(stopwatch_hmsms[1]) * ZIPCOUNT // 60
-        s_idx = int(stopwatch_hmsms[2]) * ZIPCOUNT // 60
-        ms_idx = int(stopwatch_hmsms[3] * ZIPCOUNT // 1000)
+        h_idx = zip_map(stopwatch_hmsms[0], 12) % ZIPCOUNT
+        m_idx = zip_map(stopwatch_hmsms[1])
+        s_idx = zip_map(stopwatch_hmsms[2])
+        ms_idx = zip_map(stopwatch_hmsms[3], 1000)
     elif mode_idx == CLOCK:
         ### pylint: disable=superfluous-parens
         if not (bg_displayed & (1 << HOUR)):
-            h_idx = rtc_localtime[HOUR] * ZIPCOUNT // 12 % ZIPCOUNT
+            h_idx = zip_map(rtc_localtime[HOUR], 12) % ZIPCOUNT
         if not (bg_displayed & (1 << MINUTE)):
-            m_idx = rtc_localtime[MINUTE] * ZIPCOUNT // 60
+            m_idx = zip_map(rtc_localtime[MINUTE])
         if not (bg_displayed & (1 << SECOND)):
-            s_idx = rtc_localtime[SECOND] * ZIPCOUNT // 60
+            s_idx = zip_map(rtc_localtime[SECOND])
     elif mode_idx == TIME_SET:
-        flash_on = (now_tms % 1000) > 300.0
-        if time_set_change != HOUR or flash_on:
-            h_idx = rtc_localtime[HOUR] * ZIPCOUNT // 12 % ZIPCOUNT
-        display_char = ("p" if rtc_localtime[HOUR] >= 12 else "a")
-        if time_set_change != MINUTE or flash_on:
-            m_idx = rtc_localtime[MINUTE] * ZIPCOUNT // 60
-        if time_set_change != SECOND or flash_on:
-            s_idx = rtc_localtime[SECOND] * ZIPCOUNT // 60
+        if time_set_change in (HOUR, MINUTE, SECOND):
+            flash_on = (now_tms % 1000) > 300.0
+            if time_set_change != HOUR or flash_on:
+                h_idx = zip_map(rtc_localtime[HOUR], 12) % ZIPCOUNT
+            display_char = ("p" if rtc_localtime[HOUR] >= 12 else "a")
+            if time_set_change != MINUTE or flash_on:
+                m_idx = zip_map(rtc_localtime[MINUTE])
+            if time_set_change != SECOND or flash_on:
+                s_idx = zip_map(rtc_localtime[SECOND])
+        else:
+            if time_set_change == YEAR:  ### Yellow
+                h_idx = m_idx = zip_map(rtc_localtime[YEAR] - BASE_YEAR)
+                print(rtc_localtime[YEAR])
+                display_char = "y"
+            elif time_set_change == MONTH:  ### Magenta
+                h_idx = s_idx = zip_map(rtc_localtime[MONTH])  ### starts at 1
+                display_char = "m"
+            elif time_set_change == MDAY:  ### Cyan
+                b_idx = s_idx = zip_map(rtc_localtime[MDAY])  ### starts at 1
+                display_char = "d"
+            elif time_set_change == WEEKDAY:
+                h_idx = m_idx = s_idx = rtc_localtime[WEEKDAY]
+                display_char = DAY_NAME[rtc_localtime[WEEKDAY]][:2]
+
 
     ### LEDs vary in brightness, in decr. order green, red, blue
     if h_idx is not None:
@@ -270,28 +297,30 @@ while True:
     ##updates |= HaloBackground.HALO_CHANGED
 
     if display_char is not None:
-        display.show(display_char)
+        if len(display_char) == 1:
+            display.show(display_char)
+        else:
+            ### TODO This would be better if it was set once and
+            ### loop'd without wait'ing
+            display.scroll(display_char)
     elif mode_idx == CLOCK:
         show_display_image()
     zip_px.show()
 
     ### Check for button and logo presses
-    if button_b.get_presses():
+    b_pressed = button_b.get_presses()
+    if b_pressed:
         wait = False
         if mode_idx == STOPWATCH and not clock.stopwatch_running:
             clock.stopwatch_reset()
             wait = True
-        elif mode_idx == TIME_SET:
-            time_set_change += 1
-            if time_set_change > SECOND:
-                time_set_change = HOUR
-            print(time_set_change)
-            wait = True
+
         if wait:
             while button_b.is_pressed():
                 pass
 
-    if button_a.get_presses():
+    a_pressed = button_a.get_presses()
+    if a_pressed:
         wait = False
         if mode_idx == STOPWATCH:
             if clock.stopwatch_running:
@@ -299,18 +328,42 @@ while True:
             else:
                 clock.stopwatch_start()
             wait = True
-        elif mode_idx == TIME_SET:
-            wrap = 24 if time_set_change == HOUR else 60
-            rtc_localtime, rtc_utctime, ss_ms, now_tms = clock.localandutctime_with_ms_and_ticks
 
-            ### This does not work around the DST change
-            upd_localtime = list(rtc_localtime)
-            upd_localtime[time_set_change] = (upd_localtime[time_set_change] + 1) % wrap
-            clock.set_rtc_local(upd_localtime)
-            wait = True
         if wait:
             while button_a.is_pressed():
                 pass
+
+    if mode_idx == TIME_SET:
+        if b_pressed:
+            time_set_change += 1
+            if time_set_change > WEEKDAY:
+                time_set_change = YEAR
+        elif a_pressed or pin1.is_touched():
+            incrdecr = 1 if a_pressed else -1
+            base = 0
+            wrap = 60
+            if time_set_change == HOUR:
+                wrap = 24
+            elif time_set_change == YEAR:
+                base = BASE_YEAR
+            elif time_set_change == MONTH:
+                base = 1
+                wrap = 12
+            elif time_set_change == MDAY:
+                base = 1
+                wrap = DateCalc.days_in_month(rtc_localtime[MONTH], rtc_localtime[YEAR])
+            elif time_set_change == WEEKDAY:
+                wrap = 7
+
+            rtc_localtime, rtc_utctime, ss_ms, now_tms = clock.localandutctime_with_ms_and_ticks
+            ### This does not work around the DST change
+            upd_localtime = list(rtc_localtime)
+            upd_localtime[time_set_change] = (base
+                                              + (upd_localtime[time_set_change] - base + incrdecr) % wrap)
+            clock.set_rtc_local(upd_localtime)
+
+        while button_a.is_pressed() or button_b.is_pressed() or pin1.is_touched():
+            pass
 
     if pin_logo.is_touched():
         d_char = ""
