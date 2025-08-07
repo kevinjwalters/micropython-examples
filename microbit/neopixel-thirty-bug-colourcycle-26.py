@@ -80,17 +80,12 @@ colours = (( 0, 0, 16),
            ( 9, 7,  0),
            ( 6, 6,  6),
            ( 0, 0,  0))
-counts = (1, 7, 54, 55, 60, 256)
+counts = (4, 7, 54, 55, 60, 256)
 period_ms = 5 * 1000   ### two seconds
-
-
 
 ### Display uses interrupts
 display.on()
 display.show(Image("00011\n22233\n44455\n66677\n88899"))
-
-
-neopixel.NeoPixel(NEOPIXEL_PIN, ZIPCOUNT)
 
 init_px = neopixel.NeoPixel(NEOPIXEL_PIN, ZIPCOUNT)
 init_px.fill(BLACK)
