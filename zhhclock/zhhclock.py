@@ -1,4 +1,4 @@
-### zhhlocky.py v1.1
+### zhhclock.py v1.2
 ### A clock and stopwatch with many backgrounds for Kitronik ZIP Halo HD
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -54,23 +54,22 @@ import utime
 import mcp7940
 
 from zc_comboclock import ComboClock
-from zc_bg_blank import Blank
+#from zc_bg_blank import Blank
 from zc_bg_digitalrain  import DigitalRain
-from zc_bg_pendulum  import Pendulum
+#from zc_bg_pendulum  import Pendulum
 #from zc_bg_fallingrainbow import FallingRainbow
 #from zc_bg_rotatingrainbow import RotatingRainbow
 #from zc_bg_brightnesstest import BrightnessTest
 #from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
-from zc_bg_flag import Flag
+#from zc_bg_flag import Flag
 
 from zc_utils import HOUR, MINUTE, SECOND
 
 
 try:
-    os.size("config.py")  ### For absent file this will OSError: [Errno 2] ENOENT
     import config
-except OSError:
+except ImportError:
     pass
 try:
     THIS_MICROBIT_CLOCK_PPM = config.THIS_MICROBIT_CLOCK_PPM
@@ -87,7 +86,7 @@ PPM_TO_TRIM_CONV = 32768 * 60 / (2 * 1000 * 1000)
 ### ZIP Halo HD has 60 RGB LEDs
 ZIPCOUNT = 60
 BLACK = (0, 0, 0)
-MCP_POR_TIME = (2000, 1, 1, 0, 0, 0, 0, 0)
+##MCP_POR_TIME = (2000, 1, 1, 0, 0, 0, 0, 0)
 
 VERY_LONG_PRESS_DURATION_MS = 2000
 LONG_PRESS_DURATION_MS = 1000
@@ -143,12 +142,12 @@ MODE_TIME_SET = const(2)
 
 
 background_idx = 0
-background = (Blank(zip_px, display_image),
+background = (#Blank(zip_px, display_image),
               DigitalRain(zip_px, display_image),
-              Pendulum(zip_px, display_image),
+              #Pendulum(zip_px, display_image),
               #FallingRainbow(zip_px, display_image),
               #RotatingRainbow(zip_px, display_image),
-              Flag(zip_px, display_image),
+              #Flag(zip_px, display_image),
               #BrightnessTest(zip_px, display_image),
               #LarsonScanner(zip_px, display_image),
               #Temperature(zip_px, display_image, {"function": temperature})
