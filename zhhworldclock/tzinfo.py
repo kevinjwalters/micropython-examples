@@ -38,6 +38,7 @@ class SimpleTimeZone:
                  "Canada/Pacific":       "US/Pacific",
                  "America/New_York":     "US/Eastern",
                  "America/Santiago":     ["-04", 4, "-03", "M9.1.6/24,M4.1.6/24"],
+                 "GMT":                  ["GMT", 0],
                  "Europe/London":        "GB",
                  "Europe/Paris":         "CET",
                  #"Europe/Warsaw":        "CET",
@@ -86,7 +87,7 @@ class SimpleTimeZone:
             self._tz_name = None
             part1, part2 = self._tz_data[3].split(",", 1)
             self._dst_start_rule = self._parse_rule(part1)
-            print("DST ASSIGNED")
+            ## print("DST ASSIGNED")  ### TODO DELETE
             if len(self._tz_data) > 4:
                 self._dst_offset_s = round(self._tz_data[4] * 3600)
             else:
