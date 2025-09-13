@@ -10,8 +10,8 @@ from zc_utils import SECOND
 
 
 class RotatingRainbow(HaloBackground):
-    def __init__(self, zip_, mdisplaylist, options=None):
-        super().__init__(zip_, mdisplaylist, options)
+    def __init__(self, zip_, mdisplaylist, brightness=1, options=None):
+        super().__init__(zip_, mdisplaylist,  brightness, options)
         self.displayed = 1 << SECOND
 
 

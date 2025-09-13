@@ -19,8 +19,8 @@ _DP_HEAD_BRI = 4
 
 
 class DigitalRain(HaloBackground):
-    def __init__(self, zip_, mdisplaylist, options=None):
-        super().__init__(zip_, mdisplaylist, options)
+    def __init__(self, zip_, mdisplaylist, brightness=1, options=None):
+        super().__init__(zip_, mdisplaylist, brightness, options)
 
         self._max_drops = 12
         ### This is a flattened list of [x, y, speed, trail_length, head_bri]

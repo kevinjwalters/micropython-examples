@@ -8,11 +8,13 @@ class HaloBackground:
     HALO_CHANGED = 0x02
 
 
-    def __init__(self, zip_, mdisplaylist, options=None):
+    def __init__(self, zip_, mdisplaylist, brightness=1, options=None):
         self._zip = zip_
         self._mdisplaylist = mdisplaylist
         self._last_render_tms = None
         self._options = options if options is not None else {}
+
+        self.brightness = brightness  ### This can be modified later
 
         self.displayed = 0  ### bit mask of localtime fields shown by background
 
@@ -23,6 +25,13 @@ class HaloBackground:
         if type(self) == HaloBackground:  ### pylint: disable=unidiomatic-typecheck
             raise ValueError("Needs to be sub-classed")
 
+    ### Convert values between 0.0 and 1.0 to a value for micro:bit display
+    def m_bri_norm(self, value):
+        return round(value * value * self.brightness * 9.49)
+
+    ### Convert values between 0.0 and 1.0 to a value for ZIP LEDmicro:bit display
+    def z_bri_norm(self, value):
+        return round(value * value * self.brightness * 255.49)
 
     def render(self, local_time, milliseconds, ticks_ms):
         ### This should return MICROBIT_CHANGED | HALO_CHANGED

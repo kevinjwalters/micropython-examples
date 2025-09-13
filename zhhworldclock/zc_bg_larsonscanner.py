@@ -19,8 +19,8 @@ class LarsonScanner(HaloBackground):
         x1 = (ct_s / 0.90909 - 1.1)
         if direction < 0:
             x1 = 0.0 - x1
-        x2 = x1 - 0.075 * dir
-        x3 = x1 - 0.150 * dir
+        x2 = x1 - 0.075 * direction
+        x3 = x1 - 0.150 * direction
 
         z_bri = 30
         m_bri = 9

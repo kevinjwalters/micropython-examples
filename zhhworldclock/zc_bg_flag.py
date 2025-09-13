@@ -24,8 +24,8 @@ class Flag(HaloBackground):
     POLAND_WHITE = (255//13, 255//13, 255//13)
     POLAND_CRIMSON = (212//15, 33//20, 61//20)
 
-    def __init__(self, zip_, mdisplaylist, options=None):
-        super().__init__(zip_, mdisplaylist, options)
+    def __init__(self, zip_, mdisplaylist, brightness=1, options=None):
+        super().__init__(zip_, mdisplaylist, brightness, options)
 
         self._flags = [self.flag_ukraine, self.flag_wales, self.flag_poland]
 
@@ -56,7 +56,7 @@ class Flag(HaloBackground):
             self._zip[idx] = self.WELSH_FLAG_COLS[self.WELSH_FLAG_60[idx
                                                                      * len(self.WELSH_FLAG_60)
                                                                      // len(self._zip)]]
-        ### Off substitues for white on top left
+        ### Off substitues for white on two pixels top left
         for idx in range(len(self._mdisplaylist)):
             self._mdisplaylist[idx] = 0 if idx in (0, 5) else 7  ### 7 out of 9
 
