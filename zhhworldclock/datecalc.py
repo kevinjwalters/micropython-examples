@@ -72,6 +72,20 @@ class DateCalc:
                 except IndexError:
                     pass
 
+    ### From https://stackoverflow.com/questions/22490366/how-to-use-cmp-in-python-3
+    @classmethod
+    def cmp_num(cls, num1, num2):
+        return bool(num1 > num2) - bool(num1 < num2)
+
+    @classmethod
+    def cmp(cls, time1, time2):
+        for field in (YEARDAY, HOUR, MINUTE, SECOND):
+            value = cls.cmp_num(time1[field], time2[field])
+            if value != 0:
+                break
+
+        return value
+
     @classmethod
     def days_in_month(cls, mon, yyyy):
         m_idx = mon - 1
