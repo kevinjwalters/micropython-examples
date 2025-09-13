@@ -1,4 +1,4 @@
-### zhhclockrow.py v1.1
+### zhhworldclock.py v1.2
 ### A clock and stopwatch for multiple clocks synchronised with radio with many backgrounds for Kitronik ZIP Halo HD
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -51,14 +51,17 @@
 
 ### Useful summary of MicroPython timezone blues https://github.com/orgs/micropython/discussions/12378
 
-### TODO still getting 030 errors - find out if this is from failed
-### heap allocations in CODAL and look for workarounds to minimise this
+### TODO look at logo presses for getting out of stopwatch mode
+### - background changes aren't needed/feasible there
+
+### TODO fix up all the backgrounds to fit in with new variable brightness regime
 
 
 import gc
 
 
 from microbit import Image, button_a, button_b, display, i2c, pin1, pin8, pin_logo, temperature
+import microbit
 import neopixel
 import radio
 from utime import ticks_ms, ticks_us, ticks_diff, ticks_add, sleep_ms
@@ -74,10 +77,10 @@ from zc_bg_blank import Blank
 from zc_bg_milliseconds import Milliseconds
 #from zc_bg_digitalrain  import DigitalRain
 #from zc_bg_pendulum  import Pendulum
-#from zc_bg_fallingrainbow import FallingRainbow
+from zc_bg_fallingrainbow import FallingRainbow
 #from zc_bg_rotatingrainbow import RotatingRainbow
 #from zc_bg_brightnesstest import BrightnessTest
-#from zc_bg_larsonscanner import LarsonScanner
+from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
 #from zc_bg_flag import Flag
 
@@ -90,28 +93,50 @@ BASE_YEAR = 2000
 
 
 ### Any TZ offsets are positive for west and negative for east
-cfg = {"CLOCK_PPM": 0.0, "RTC_PPM": 0.0, "NUMBER": 0, "TZ": "GMT"}
+### BRIGHTNESS is the normal value for room
+### ADAPTIVE is additional amount scaled based on measured sunlight
+### PIR is pin name for presence triggered brightness
+cfg = {"CLOCK_PPM": 0.0,
+       "RTC_PPM": 0.0,
+       "NUMBER": 0,
+       "COUNT": 1,
+       "BRIGHTNESS": "0.1:0.018",
+       "ADAPTIVE": 0.9,
+       "NIGHT": "20:7",
+       "PIR": "",
+       "TZ": "GMT"}
 
 ### Optional variables in optional config.py
 ### THIS_MICROBIT_CLOCK_PPM
 ### THIS_ZHH_RTC_PPM
 ### THIS_CLOCK_NUMBER
+### THIS_CLOCK_COUNT
 ### TZ
 try:
     import config
-
     for im_var in dir(config):
-        for cfg_var in cfg:
+        for cfg_var in cfg:  ### pylint: disable=consider-using-dict-items
             if im_var == cfg_var or im_var.endswith("_" + cfg_var):
                 cls = type(cfg[cfg_var])
                 try:
-                    cfg[cfg_var] = cls(getattr(config, im_var))
+                    cfg[cfg_var] = cls(getattr(config, im_var))  ### pylint: disable=modified-iterating-dict
                 except ValueError:
                     pass
 except (ImportError, SyntaxError):
     pass
 
 MASTER = cfg["NUMBER"] == 1 if cfg["NUMBER"] >= 1 else None
+
+BRI_STD = [float(x) for x in cfg["BRIGHTNESS"].split(":")]
+if len(BRI_STD) == 1:
+    BRI_STD.append(BRI_STD[0])
+dusk, dawn = [int(x) for x in cfg["NIGHT"].split(":")] if cfg["NIGHT"].find(":") >= 0 else (None, None)
+adapt_bri = cfg["ADAPTIVE"]
+light_level = 0.0
+
+presence_pin = getattr(microbit, cfg["PIR"]) if cfg["PIR"] else None
+PRESENCE_TIME_S = 600
+presence_gone_t = None
 
 print("NUMBER", cfg["NUMBER"])
 display.scroll("TZ=" + cfg["TZ"])
@@ -129,6 +154,31 @@ LONG_DUR_MS = 1000
 SHORT_DUR_MS = 175
 
 RADIO_TX_MS = 3  ### A guess at time taken to transmit
+
+
+def calc_brightness(md_idx, r_ltime, light_lvl, humans):
+    global presence_gone_t  ### pylint: disable=global-statement
+
+    value = BRI_STD[0]  ### day level
+    if adapt_bri:
+        ### Quantize value to mostly stop this changing with tiny light level changes
+        value += round(light_lvl / 16.0) / 16.0 * adapt_bri
+
+    ### Dim value for clock mode and if it's either night time
+    ### or a human has not been detected by presence sensor recently
+    if md_idx != CLOCK or BRI_STD[0] == BRI_STD[1]:
+        pass
+    elif dusk is not None and (r_ltime[HOUR] >= dusk or r_ltime[HOUR] < dawn):
+        value = BRI_STD[1]  ### dim night level
+    elif humans is not None:
+        if humans:
+            presence_gone_t = list(r_ltime)
+            DateCalc.add(presence_gone_t, PRESENCE_TIME_S)
+
+        if DateCalc.cmp(r_ltime, presence_gone_t) > 0:
+            value = BRI_STD[1]  ### dim night value
+
+    return value
 
 pin1.set_touch_mode(pin1.CAPACITIVE)
 
@@ -195,21 +245,21 @@ TIME_SET = 2
 
 
 def zip_map(z_idx, count=60):
-    """Map to a ZIP pixel, idx can be a float."""
+    """Map to a ZIP pixel position, idx can be a float."""
     return int(z_idx * ZIPCOUNT // count)
 
-
 background_idx = 0
-background = (Blank(zip_px, display_image),
-              Milliseconds(zip_px, display_image),
-              #DigitalRain(zip_px, display_image),
-              #Pendulum(zip_px, display_image),
-              #FallingRainbow(zip_px, display_image),
-              #RotatingRainbow(zip_px, display_image),
-              #Flag(zip_px, display_image),
-              #BrightnessTest(zip_px, display_image),
-              #LarsonScanner(zip_px, display_image),
-              #Temperature(zip_px, display_image, {"function": temperature})
+bri = BRI_STD[0]
+background = (Blank(zip_px, display_image, bri),
+              Milliseconds(zip_px, display_image, bri),
+              #DigitalRain(zip_px, display_image, bri),
+              #Pendulum(zip_px, display_image, bri),
+              FallingRainbow(zip_px, display_image, bri),
+              #RotatingRainbow(zip_px, display_image, bri),
+              #Flag(zip_px, display_image, bri),
+              #BrightnessTest(zip_px, display_image, bri),
+              LarsonScanner(zip_px, display_image, bri),
+              #Temperature(zip_px, display_image, bri, {"function": temperature})
               )
 gc.collect()
 
@@ -224,9 +274,14 @@ SYNC_PERIOD_TMS = clock.s_to_ts(57 * 60_000)
 clock_start_tms = ticks_ms()
 last_tx_tms = ticks_add(clock_start_tms, 0 - TX_PERIOD_TMS)
 last_sync_tms = ticks_add(clock_start_tms, 0 - SYNC_PERIOD_TMS)
+new_sec = True
+last_ss = None
 first_comms_done = False
+r_bri = g_bri = b_bri = None
+
 while True:
     if mode_idx != STOPWATCH:
+        ### clear micro:bit display
         for idx in range(len(display_image)):
             display_image[idx] = 0
     zip_px.fill(BLACK)
@@ -234,6 +289,19 @@ while True:
     rtc_localtime, rtc_utctime, ss_ms, now_tms = clock.localandutctime_with_ms_and_ticks
     if mode_idx == CLOCK:
         updates = bg.render(rtc_localtime, ss_ms, now_tms)
+
+    new_sec = rtc_localtime[SECOND] != last_ss
+    last_ss = rtc_localtime[SECOND]
+    if new_sec:
+        new_bri = calc_brightness(mode_idx,
+                                  rtc_localtime,
+                                  light_level,
+                                  presence_pin.read_digital() if presence_pin else None)
+        if new_bri != bg.brightness or r_bri is None:
+            bg.brightness = new_bri
+            r_bri = bg.z_bri_norm(0.79)
+            g_bri = bg.z_bri_norm(0.62)
+            b_bri = bg.z_bri_norm(0.90)
 
     h_idx = m_idx = s_idx = ms_idx = None
     display_char = None
@@ -280,19 +348,19 @@ while True:
                 h_idx = m_idx = s_idx = rtc_localtime[WEEKDAY]
                 display_char = DAY_NAME[rtc_localtime[WEEKDAY]][:2]
 
-
-    ### LEDs vary in brightness, in decr. order green, red, blue
     if h_idx is not None:
-        bri = min(255, zip_px[h_idx][0] + 14) if zip_px[h_idx][0] < 7 else 0
+        bri = min(255, zip_px[h_idx][0] + r_bri) if zip_px[h_idx][0] < r_bri >> 1 else 0
         zip_px[h_idx] = (bri, zip_px[h_idx][1], zip_px[h_idx][2])
     if m_idx is not None:
-        bri = min(255, zip_px[m_idx][1] + 10) if zip_px[m_idx][1] < 4 else 0
+        bri = min(255, zip_px[m_idx][1] + g_bri) if zip_px[m_idx][1] < g_bri >> 1 else 0
         zip_px[m_idx] = (zip_px[m_idx][0], bri, zip_px[m_idx][2])
     if s_idx is not None:
-        bri = min(255, zip_px[s_idx][2] + 20) if zip_px[s_idx][2] < 10 else 0
+        bri = min(255, zip_px[s_idx][2] + b_bri) if zip_px[s_idx][2] < b_bri >> 1 else 0
         zip_px[s_idx] = (zip_px[s_idx][0], zip_px[s_idx][1], bri)
     if ms_idx is not None:
-        bri = (min(255, zip_px[ms_idx][0] + 32 if clock.stopwatch_running else 24) if zip_px[ms_idx][0] < 8 else 0)
+        bri = (min(255, zip_px[ms_idx][0] + r_bri * 2
+               if clock.stopwatch_running
+               else r_bri * 3 // 2) if zip_px[ms_idx][0] < r_bri >> 1 else 0)
         zip_px[ms_idx] = (bri, zip_px[ms_idx][1], zip_px[ms_idx][2])
     ##updates |= HaloBackground.HALO_CHANGED
 
@@ -408,6 +476,10 @@ while True:
             mode_idx = TIME_SET
             time_set_change = HOUR
             clock.resync_enabled = False
+
+    ### Calculate a filtered light level to smooth/slow changes
+    if adapt_bri and new_sec:
+        light_level = display.read_light_level() * 0.125 + light_level * 0.875
 
     ### Skip communication (over radio) if not needed
     ### Important to use UTC time here as not all timezones's hours start at same time
