@@ -22,24 +22,26 @@ class LarsonScanner(HaloBackground):
         x2 = x1 - 0.075 * direction
         x3 = x1 - 0.150 * direction
 
-        z_bri = 30
-        m_bri = 9
         il_radius = 0.08
+        gbri = self.brightness
+        ### This can exceed the brightness of 1.0
+        ### [zm]_bri_norm will cap values
         for x in (x1, x2, x3):
             for p_idx in get_z_pixels_through_x(x):
                 distance = abs(Z_LED_POS[p_idx][0] - x)
-                brightness = (max(0, (il_radius - distance)) / il_radius)
+                brightness = (max(0, (il_radius - distance)) / il_radius) * 1.15
                 if brightness > 0.0:
-                    ### TODO - perhaps match up brightness between the micro:bit V2 and self._zip
-                    self._zip[p_idx] = (max(round(brightness * brightness * z_bri), self._zip[p_idx][0]), 0, 0)
+                    ### Set red level on ZIP LEDs
+                    self._zip[p_idx] = (max(self.z_bri_norm(brightness, gbri),
+                                            self._zip[p_idx][0]),
+                                        0, 0)
 
             for m_idx in get_m_pixels_through_x(x):
                 distance = abs(M_LED_POS[m_idx][0] - x)
-                brightness = (max(0, (il_radius - distance)) / il_radius)
+                brightness = (max(0, (il_radius - distance)) / il_radius) * 1.5
                 if brightness > 0.0:
-                    self._mdisplaylist[m_idx] = max(round(brightness * m_bri),
+                    self._mdisplaylist[m_idx] = max(self.m_bri_norm(brightness, gbri),
                                                     self._mdisplaylist[m_idx])
-            z_bri /= 2
-            m_bri /= 2
+            gbri /= 2.0
 
         return self.MICROBIT_CHANGED | self.HALO_CHANGED
