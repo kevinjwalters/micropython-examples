@@ -13,22 +13,58 @@ class Flag(HaloBackground):
     WELSH_FLAG_60 = tuple((3,) * 8 + (1,) * 3 + (3,1,3,1,3,1,2,1,1,2,2,2,1,1)
                           + (2,) * 11 + (1,2,1,1,2,1,1,1,2,2) + (3,) * 3
                           + (1, 1, 3, 0, 1, 3, 3, 1) + (3,) * 3)
-    WELSH_FLAG_COLS = ((0, 0, 0),
-                       (200//10, 16//30, 46//30),
-                       (0, 177//10, 64//10),
-                       (255//13, 255//13, 255//13))
+    #WELSH_FLAG_COLS = ((0, 0, 0),
+    #                   (200//10, 16//30, 46//30),
+    #                   (0, 177//10, 64//10),
+    #                   (255//13, 255//13, 255//13))
 
-    UKRAINE_BLUE   = (0, 87//8, 183//6)
-    UKRAINE_GOLD = (255//11, 215//11, 0)
+    #UKRAINE_BLUE   = (0, 87//8, 183//6)
+    #UKRAINE_GOLD = (255//11, 215//11, 0)
 
-    POLAND_WHITE = (255//13, 255//13, 255//13)
-    POLAND_CRIMSON = (212//15, 33//20, 61//20)
+    #POLAND_WHITE = (255//13, 255//13, 255//13)
+    #POLAND_CRIMSON = (212//15, 33//20, 61//20)
+
+    ZIPCOL = {"wales":   ([0, 0, 0],
+                          [200//10, 16//30, 46//30],
+                          [0, 177//10, 64//10],
+                          [255//13, 255//13, 255//13]
+                          ),
+              "ukraine": ([0, 87//8, 183//6],
+                          [255//11, 215//11, 0]
+                          ),
+              "poland":  ([255//13, 255//13, 255//13],
+                          [212//15, 33//20, 61//20]
+                         )
+             }
+    ### Convert the r,g,b pixel values at brightness 0.1 into normalised
+    ### brightness values
+    for _, cols in ZIPCOL.items():
+        for col in cols:
+            col[0] = HaloBackground.z_pix_norm(col[0], 0.1)
+            col[1] = HaloBackground.z_pix_norm(col[1], 0.1)
+            col[2] = HaloBackground.z_pix_norm(col[2], 0.1)
 
     def __init__(self, zip_, mdisplaylist, brightness=1, options=None):
         super().__init__(zip_, mdisplaylist, brightness, options)
 
-        self._flags = [self.flag_ukraine, self.flag_wales, self.flag_poland]
+        self._pal_bidx = {}
+        self._flags = []
+        try:
+            flags = options.get("flag").split()
+        except AttributeError:
+            flags = ["ukraine"]
 
+        for flag in flags:
+            try:
+                bfn = getattr(self, "flag_" + flag)
+                self._flags.append(bfn)
+                citer = iter(self.ZIPCOL[flag])
+                col0 = next(citer)
+                self._pal_bidx[flag] = self.palette_add(col0)
+                for col in citer:
+                    self.palette_add(col)
+            except AttributeError:
+                pass
 
     def _flag_h2(self, top_col, bottom_col):
         quarter = len(self._zip) // 4
@@ -44,21 +80,26 @@ class Flag(HaloBackground):
             self._zip[idx] = colour
 
     def flag_ukraine(self):
-        self._flag_h2(self.UKRAINE_BLUE, self.UKRAINE_GOLD)
+        bidx = self._pal_bidx["ukraine"]
+        self._flag_h2(self.palette(bidx), self.palette(bidx + 1))
         return self.HALO_CHANGED
 
     def flag_poland(self):
-        self._flag_h2(self.POLAND_WHITE, self.POLAND_CRIMSON)
+        bidx = self._pal_bidx["poland"]
+        self._flag_h2(self.palette(bidx), self.palette(bidx + 1))
         return self.HALO_CHANGED
 
     def flag_wales(self):
+        bidx = self._pal_bidx["wales"]
         for idx in range(len(self._zip)):
-            self._zip[idx] = self.WELSH_FLAG_COLS[self.WELSH_FLAG_60[idx
-                                                                     * len(self.WELSH_FLAG_60)
-                                                                     // len(self._zip)]]
+            c_idx = self.WELSH_FLAG_60[idx * len(self.WELSH_FLAG_60)
+                                       // len(self._zip)]
+            self._zip[idx] = self.palette(bidx + c_idx)
+
         ### Off substitues for white on two pixels top left
+        m_bri_TOCALC = self.m_bri_norm(1.0, self.brightness)
         for idx in range(len(self._mdisplaylist)):
-            self._mdisplaylist[idx] = 0 if idx in (0, 5) else 7  ### 7 out of 9
+            self._mdisplaylist[idx] = 0 if idx in (0, 5) else m_bri_TOCALC
 
         return self.HALO_CHANGED | self.MICROBIT_CHANGED
 

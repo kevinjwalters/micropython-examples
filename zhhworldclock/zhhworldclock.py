@@ -77,12 +77,12 @@ from zc_bg_blank import Blank
 from zc_bg_milliseconds import Milliseconds
 #from zc_bg_digitalrain  import DigitalRain
 #from zc_bg_pendulum  import Pendulum
-from zc_bg_fallingrainbow import FallingRainbow
+#from zc_bg_fallingrainbow import FallingRainbow
 #from zc_bg_rotatingrainbow import RotatingRainbow
 #from zc_bg_brightnesstest import BrightnessTest
 from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
-#from zc_bg_flag import Flag
+from zc_bg_flag import Flag
 
 from zc_utils import YEAR, MONTH, MDAY, HOUR, MINUTE, SECOND, WEEKDAY
 
@@ -254,9 +254,9 @@ background = (Blank(zip_px, display_image, bri),
               Milliseconds(zip_px, display_image, bri),
               #DigitalRain(zip_px, display_image, bri),
               #Pendulum(zip_px, display_image, bri),
-              FallingRainbow(zip_px, display_image, bri),
+              #FallingRainbow(zip_px, display_image, bri),
               #RotatingRainbow(zip_px, display_image, bri),
-              #Flag(zip_px, display_image, bri),
+              Flag(zip_px, display_image, bri, {"flag": "ukraine wales poland"}),
               #BrightnessTest(zip_px, display_image, bri),
               LarsonScanner(zip_px, display_image, bri),
               #Temperature(zip_px, display_image, bri, {"function": temperature})
@@ -279,6 +279,12 @@ last_ss = None
 first_comms_done = False
 r_bri = g_bri = b_bri = None
 
+### TODO there are many global variables and creating new ones in loop
+### can cause MemoryException as the dict that stores them is enlarged
+incrdecr = base = wrap = 0
+t1_ms = t2_ms = ticks_ms()
+
+gc.collect()
 while True:
     if mode_idx != STOPWATCH:
         ### clear micro:bit display
@@ -293,15 +299,15 @@ while True:
     new_sec = rtc_localtime[SECOND] != last_ss
     last_ss = rtc_localtime[SECOND]
     if new_sec:
-        new_bri = calc_brightness(mode_idx,
+        bri = calc_brightness(mode_idx,
                                   rtc_localtime,
                                   light_level,
                                   presence_pin.read_digital() if presence_pin else None)
-        if new_bri != bg.brightness or r_bri is None:
-            bg.brightness = new_bri
-            r_bri = bg.z_bri_norm(0.79)
-            g_bri = bg.z_bri_norm(0.62)
-            b_bri = bg.z_bri_norm(0.90)
+        if bri != bg.brightness or r_bri is None:
+            bg.brightness = bri
+            r_bri = bg.z_bri_norm(0.79, bri)
+            g_bri = bg.z_bri_norm(0.62, bri)
+            b_bri = bg.z_bri_norm(0.90, bri)
 
     h_idx = m_idx = s_idx = ms_idx = None
     display_char = None
