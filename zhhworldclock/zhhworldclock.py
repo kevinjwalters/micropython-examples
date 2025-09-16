@@ -1,4 +1,4 @@
-### zhhworldclock.py v1.2
+### zhhworldclock.py v1.3
 ### A clock and stopwatch for multiple clocks synchronised with radio with many backgrounds for Kitronik ZIP Halo HD
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -75,12 +75,12 @@ from zc_clockcomms import ClockComms, MsgTimeWms
 
 from zc_bg_blank import Blank
 from zc_bg_milliseconds import Milliseconds
-#from zc_bg_digitalrain  import DigitalRain
+from zc_bg_digitalrain  import DigitalRain
 #from zc_bg_pendulum  import Pendulum
 #from zc_bg_fallingrainbow import FallingRainbow
 #from zc_bg_rotatingrainbow import RotatingRainbow
 #from zc_bg_brightnesstest import BrightnessTest
-from zc_bg_larsonscanner import LarsonScanner
+#from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
 from zc_bg_flag import Flag
 
@@ -249,17 +249,17 @@ def zip_map(z_idx, count=60):
     return int(z_idx * ZIPCOUNT // count)
 
 background_idx = 0
-bri = BRI_STD[0]
-background = (Blank(zip_px, display_image, bri),
-              Milliseconds(zip_px, display_image, bri),
-              #DigitalRain(zip_px, display_image, bri),
-              #Pendulum(zip_px, display_image, bri),
-              #FallingRainbow(zip_px, display_image, bri),
-              #RotatingRainbow(zip_px, display_image, bri),
-              Flag(zip_px, display_image, bri, {"flag": "ukraine wales poland"}),
-              #BrightnessTest(zip_px, display_image, bri),
-              LarsonScanner(zip_px, display_image, bri),
-              #Temperature(zip_px, display_image, bri, {"function": temperature})
+disp_bri = BRI_STD[0]
+background = (Blank(zip_px, display_image, disp_bri),
+              Milliseconds(zip_px, display_image, disp_bri),
+              DigitalRain(zip_px, display_image, disp_bri),
+              #Pendulum(zip_px, display_image, disp_bri),
+              #FallingRainbow(zip_px, display_image, disp_bri),
+              #RotatingRainbow(zip_px, display_image, disp_bri),
+              Flag(zip_px, display_image, disp_bri, {"flag": "ukraine wales poland"}),
+              #BrightnessTest(zip_px, display_image, disp_bri),
+              #LarsonScanner(zip_px, display_image, disp_bri),
+              #Temperature(zip_px, display_image, disp_bri, {"function": temperature})
               )
 gc.collect()
 
@@ -299,15 +299,15 @@ while True:
     new_sec = rtc_localtime[SECOND] != last_ss
     last_ss = rtc_localtime[SECOND]
     if new_sec:
-        bri = calc_brightness(mode_idx,
-                                  rtc_localtime,
-                                  light_level,
-                                  presence_pin.read_digital() if presence_pin else None)
-        if bri != bg.brightness or r_bri is None:
-            bg.brightness = bri
-            r_bri = bg.z_bri_norm(0.79, bri)
-            g_bri = bg.z_bri_norm(0.62, bri)
-            b_bri = bg.z_bri_norm(0.90, bri)
+        disp_bri = calc_brightness(mode_idx,
+                                   rtc_localtime,
+                                   light_level,
+                                   presence_pin.read_digital() if presence_pin else None)
+        if disp_bri != bg.brightness or r_bri is None:
+            bg.brightness = disp_bri
+            r_bri = bg.z_bri_norm(0.79, disp_bri)
+            g_bri = bg.z_bri_norm(0.62, disp_bri)
+            b_bri = bg.z_bri_norm(0.90, disp_bri)
 
     h_idx = m_idx = s_idx = ms_idx = None
     display_char = None
