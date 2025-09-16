@@ -59,7 +59,7 @@ class DigitalRain(HaloBackground):
             self._rain_drops[base_idx + _DP_Y] = random.uniform(-1, -1.1)
             self._rain_drops[base_idx + _DP_SPEED] = random.uniform(0.2, 0.6) if random.random() < 0.9 else random.uniform(0.1, 1.5)
             self._rain_drops[base_idx + _DP_TRAIL_LENGTH] = random.uniform(0.3, 1.5) * 0.5 + random.uniform(0.7, 1.0) * 0.5
-            self._rain_drops[base_idx + _DP_HEAD_BRI] = random.randint(60, 255)
+            self._rain_drops[base_idx + _DP_HEAD_BRI] = random.uniform(0.3, 1.0)   ### was random.randint(60, 255)
             drops_added += 1
             if drops_added >= new_drop_count:
                 break
@@ -73,12 +73,14 @@ class DigitalRain(HaloBackground):
 
         ### Render rain drops
         ### Use a max() strategy to combine "droplets" on LEDs
-        z_bri = 30
+        ### Brightness values calculated in subsequent code can exceed 1.0
+        ### [zm]_bri_norm will cap values
         il_radius = 0.08
+        gbri = self.brightness
         for drop_no in range(self._max_drops):
             x, y, speed, trail_length, head_bri = self._rain_drops[drop_no * 5:(drop_no * 5 + 5)]
             if head_bri == 0.0:
-                continue
+                continue  ### not a rain drop
 
             for p_idx in get_z_pixels_through_x(x):
                 distances = vertical_line_near_pixel(Z_LED_SPACING, x, y, y - trail_length, *Z_LED_POS[p_idx])
@@ -87,8 +89,8 @@ class DigitalRain(HaloBackground):
                     brightness = (trail_bri * head_bri
                                   * max(0, (il_radius - distances[0])) / il_radius)
                     if brightness > 0.0:
-                        ### TODO - perhaps match up brightness between the micro:bit V2 and self._zip
-                        self._zip[p_idx] = (max(round(brightness * brightness / 65535.0 * z_bri), self._zip[p_idx][0]), 0, 0)
+                        self._zip[p_idx] = (max(self.m_bri_norm(brightness * 1.25 + 2, gbri),
+                                                self._zip[p_idx][0]), 0, 0)
 
             for m_idx in get_m_pixels_through_x(x):
                 distances = vertical_line_near_pixel(M_LED_SPACING, x, y, y - trail_length, *M_LED_POS[m_idx])
@@ -97,7 +99,8 @@ class DigitalRain(HaloBackground):
                     brightness = (trail_bri * head_bri
                                   * max(0, (il_radius - distances[0])) / il_radius)
                     if brightness > 0.0:
-                        self._mdisplaylist[m_idx] = max(round(brightness / 255.0 * 9), self._mdisplaylist[m_idx])
+                        self._mdisplaylist[m_idx] = max(self.m_bri_norm(brightness * 1.6, gbri),
+                                                        self._mdisplaylist[m_idx])
 
         self._last_run_tms = ticks_ms
         ### TODO could count the changes

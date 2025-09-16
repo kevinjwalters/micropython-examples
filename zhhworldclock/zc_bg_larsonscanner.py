@@ -24,7 +24,7 @@ class LarsonScanner(HaloBackground):
 
         il_radius = 0.08
         gbri = self.brightness
-        ### This can exceed the brightness of 1.0
+        ### Brightness values calculated in subsequent code can exceed 1.0
         ### [zm]_bri_norm will cap values
         for x in (x1, x2, x3):
             for p_idx in get_z_pixels_through_x(x):
