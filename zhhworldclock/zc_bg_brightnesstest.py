@@ -8,7 +8,7 @@ from zc_bg import HaloBackground
 
 class BrightnessTest(HaloBackground):
     def render(self, local_time, milliseconds, ticks_ms):
-        for idx in range(min(len(self._zip), 255)):
+        for idx in range(min(len(self._zip), 255 + 1)):
             self._zip[idx] = (idx, 0, 0)
 
         for idx in range(9 + 1):
