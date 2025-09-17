@@ -83,7 +83,8 @@ class DigitalRain(HaloBackground):
                 continue  ### not a rain drop
 
             for p_idx in get_z_pixels_through_x(x):
-                distances = vertical_line_near_pixel(Z_LED_SPACING, x, y, y - trail_length, *Z_LED_POS[p_idx])
+                distances = vertical_line_near_pixel(Z_LED_SPACING, x, y, y - trail_length,
+                                                     Z_LED_POS[p_idx * 2], Z_LED_POS[p_idx * 2 + 1])
                 if distances:
                     trail_bri = distances[1] * distances[1] * 0.75 + 0.25
                     brightness = (trail_bri * head_bri
@@ -93,7 +94,8 @@ class DigitalRain(HaloBackground):
                                                 self._zip[p_idx][0]), 0, 0)
 
             for m_idx in get_m_pixels_through_x(x):
-                distances = vertical_line_near_pixel(M_LED_SPACING, x, y, y - trail_length, *M_LED_POS[m_idx])
+                distances = vertical_line_near_pixel(M_LED_SPACING, x, y, y - trail_length,
+                                                     M_LED_POS[m_idx * 2], M_LED_POS[m_idx * 2 + 1])
                 if distances:
                     trail_bri = distances[1] * distances[1] * 0.75 + 0.25
                     brightness = (trail_bri * head_bri

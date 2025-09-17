@@ -123,7 +123,7 @@ class Flag(HaloBackground):
             ### Modulate the values on the Halo taking advantage of symmetry
             half_len = len(self._zip) // 2
             for idx in range(len(self._zip) // 4, len(self._zip) * 3 // 4 + 1):
-                led_x, _ = Z_LED_POS[idx]
+                led_x = Z_LED_POS[idx * 2]
                 moving_x = 0 - led_x + shift_x
                 col_p1 = self._wind_ripple_mod(moving_x) / 1.9 + 1.0
                 r, g, b = self._zip[idx]
@@ -140,7 +140,7 @@ class Flag(HaloBackground):
         if changes_ & self.MICROBIT_CHANGED:
             ### Modulate micro:bit display using values calculated per column
             for m_idx in range(0, 5):
-                led_x, _ = M_LED_POS[m_idx]
+                led_x = M_LED_POS[m_idx * 2]
                 moving_x = 0 - led_x + shift_x
                 col_p1 = self._wind_ripple_mod(moving_x) / 1.9 + 1.0
                 for y_off in range(0, 25, 5):

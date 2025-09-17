@@ -16,7 +16,7 @@ class FallingRainbow(HaloBackground):
         ### Use symmetry of circular LED layout to set other side using same value
         cbri = 0.80 * self.brightness
         for idx in range(len(self._zip) // 2 + 1):
-            wavelength_nm = 380 + (Z_LED_POS[idx][1] + 1.0) * 150 - (secs % 60 - 30) * (380/30)
+            wavelength_nm = 380.0 + (Z_LED_POS[idx * 2 + 1] + 1.0) * 150 - (secs % 60 - 30) * (380/30)
             r, g, b = wavelengthToRGBtuple(wavelength_nm)
             if wavelength_nm < 405.0:
                 b = min(b, r)  ### blue seems too high here, cap to red level

@@ -2,8 +2,11 @@
 ###
 ### SPDX-License-Identifier: MIT
 
-
+import array
 from math import pi, sin, cos, sqrt
+
+### Z_LED_POS AND M_LED_POS are inelegant arrays to reduce memory use
+### and perhaps cause less memory fragmentation
 
 ### TODO considering punting these fields out to a zc_constants or similar
 
@@ -23,12 +26,22 @@ ZIP_DIAMETER = 80        ### in mm
 ZIP_RADIUS = ZIP_DIAMETER / 2
 DIM_SCALE = ZIP_DIAMETER / 2
 
+### TODO - try an array.array to see how much memory it saves for Z_LED_POS AND M_LED_POS
+### indexing will need to be [2 * idx]
+
 ### LED positions with values ranging from -1.0 to 1.0
 ### top left of bounding square is -1,-1 bottom right is 1,1
-Z_LED_POS = tuple(tuple([(sin(idx / ZIPCOUNT * 2 * pi),
-                          0.0 - cos(idx / ZIPCOUNT * 2 * pi))
-                         for idx in range(ZIPCOUNT)]))
 
+Z_LED_POS = array.array("f", [0.0] * (ZIPCOUNT * 2))
+M_LED_POS = array.array("f", [0.0] * (5 * 5 * 2))
+
+for z_idx in range(ZIPCOUNT):
+    Z_LED_POS[z_idx * 2] = sin(z_idx / ZIPCOUNT * 2 * pi)
+    Z_LED_POS[z_idx * 2 + 1] = 0.0 - cos(z_idx / ZIPCOUNT * 2 * pi)
+
+#Z_LED_POS = tuple(tuple([(sin(idx / ZIPCOUNT * 2 * pi),
+#                          0.0 - cos(idx / ZIPCOUNT * 2 * pi))
+#                         for idx in range(ZIPCOUNT)]))
 
 ### This is in the display dimensions (-1 to 1)
 Z_LED_SPACING = pi * ZIP_DIAMETER / ZIPCOUNT / DIM_SCALE
@@ -45,7 +58,7 @@ height_order_idxs = [x for pair in zip(range(ZIPCOUNT // 2, ZIPCOUNT),
 for x_idx in range(len(z_leds_near_x)):
     pos_x = (x_idx - half_width) / half_width
     for zp_idx in height_order_idxs:
-        led_x, led_y = Z_LED_POS[zp_idx]
+        led_x = Z_LED_POS[zp_idx * 2]
         if abs(led_x - pos_x) < z_near_distance:
             z_leds_near_x[x_idx].append(zp_idx)
 
@@ -56,8 +69,8 @@ def get_z_pixels_through_x(l_x):
     return z_leds_near_x[p_idx]
 
 def get_z_pixel_dist(idx, x, y):
-    dx = x - Z_LED_POS[idx][0]
-    dy = y - Z_LED_POS[idx][1]
+    dx = x - Z_LED_POS[idx * 2]
+    dy = y - Z_LED_POS[idx * 2 + 1]
     return sqrt(dx*dx + dy*dy)
 
 
@@ -66,26 +79,30 @@ M_RIGHT = 0 - M_LEFT
 ### This would be 2.0 if micro:bit display was central but it's
 ### a bit higher and fouth row [3] is almost aligned with middle
 M_TOP = 0 - M_LED_SPACING * 2.9
-
-M_LED_POS = []
+m_idx = 0
 for y_idx in range(5):
     for x_idx in range(5):
-        M_LED_POS.append((M_LEFT + x_idx * M_LED_SPACING, M_TOP + y_idx * M_LED_SPACING))
+        #M_LED_POS.append((M_LEFT + x_idx * M_LED_SPACING, M_TOP + y_idx * M_LED_SPACING))
+        M_LED_POS[m_idx] = M_LEFT + x_idx * M_LED_SPACING
+        M_LED_POS[m_idx + 1] = M_TOP + y_idx * M_LED_SPACING
+        m_idx += 2
 
 m_near_distance = M_LED_SPACING / 1.8
 
 def get_m_pixels_through_x(l_x):
     near_idxs = []
+    ### Scan the top row for nearby pixels
     for p_idx in range(5):
-        if abs(M_LED_POS[p_idx][0] - l_x) < m_near_distance:
+        if abs(M_LED_POS[p_idx * 2] - l_x) < m_near_distance:
             near_idxs.append(p_idx)
     row_near_count = len(near_idxs)
     if row_near_count == 0:
         return near_idxs
 
-    near_idxs = near_idxs * 5  ### duplicate first row
-    for m_idx in range(row_near_count, len(near_idxs)):
-        near_idxs[m_idx] += m_idx // row_near_count * 5
+    ### duplicate first row to cover all the rows
+    near_idxs = near_idxs * 5
+    for mi_idx in range(row_near_count, len(near_idxs)):
+        near_idxs[mi_idx] += mi_idx // row_near_count * 5
     return near_idxs
 
 
