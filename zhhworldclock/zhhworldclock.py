@@ -1,4 +1,4 @@
-### zhhworldclock.py v1.3
+### zhhworldclock.py v1.4
 ### A clock and stopwatch for multiple clocks synchronised with radio with many backgrounds for Kitronik ZIP Halo HD
 
 ### copy this file to BBC micro:bit V2 as main.py
@@ -74,23 +74,19 @@ from zc_comboclock import ComboClock
 from zc_clockcomms import ClockComms, MsgTimeWms
 
 from zc_bg_blank import Blank
-from zc_bg_milliseconds import Milliseconds
-from zc_bg_digitalrain  import DigitalRain
+#from zc_bg_milliseconds import Milliseconds
+#from zc_bg_digitalrain  import DigitalRain
 #from zc_bg_pendulum  import Pendulum
 #from zc_bg_fallingrainbow import FallingRainbow
 #from zc_bg_rotatingrainbow import RotatingRainbow
 #from zc_bg_brightnesstest import BrightnessTest
-#from zc_bg_larsonscanner import LarsonScanner
+from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
 from zc_bg_flag import Flag
 
 from zc_utils import YEAR, MONTH, MDAY, HOUR, MINUTE, SECOND, WEEKDAY
 
 radio.off()   ### the import turns it on
-
-DAY_NAME = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-BASE_YEAR = 2000
-
 
 ### Any TZ offsets are positive for west and negative for east
 ### BRIGHTNESS is the normal value for room
@@ -112,6 +108,7 @@ cfg = {"CLOCK_PPM": 0.0,
 ### THIS_CLOCK_NUMBER
 ### THIS_CLOCK_COUNT
 ### TZ
+gc.collect()
 try:
     import config
     for im_var in dir(config):
@@ -126,6 +123,9 @@ except (ImportError, SyntaxError):
     pass
 
 MASTER = cfg["NUMBER"] == 1 if cfg["NUMBER"] >= 1 else None
+
+DAY_NAME = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+BASE_YEAR = 2000
 
 BRI_STD = [float(x) for x in cfg["BRIGHTNESS"].split(":")]
 if len(BRI_STD) == 1:
@@ -251,15 +251,15 @@ def zip_map(z_idx, count=60):
 background_idx = 0
 disp_bri = BRI_STD[0]
 background = (Blank(zip_px, display_image, disp_bri),
-              Milliseconds(zip_px, display_image, disp_bri),
-              DigitalRain(zip_px, display_image, disp_bri),
+              #Milliseconds(zip_px, display_image, disp_bri),
+              #DigitalRain(zip_px, display_image, disp_bri),
               #Pendulum(zip_px, display_image, disp_bri),
-              #FallingRainbow(zip_px, display_image, disp_bri),
+              #FallingRainbow(zip_px, display_image, disp_bri)
               #RotatingRainbow(zip_px, display_image, disp_bri),
-              Flag(zip_px, display_image, disp_bri, {"flag": "ukraine wales poland"}),
               #BrightnessTest(zip_px, display_image, disp_bri),
-              #LarsonScanner(zip_px, display_image, disp_bri),
-              #Temperature(zip_px, display_image, disp_bri, {"function": temperature})
+              LarsonScanner(zip_px, display_image, disp_bri),
+              #Temperature(zip_px, display_image, disp_bri, {"function": temperature}),
+              Flag(zip_px, display_image, disp_bri, {"flag": "ukraine wales poland"})
               )
 gc.collect()
 
@@ -445,7 +445,7 @@ while True:
         t1_ms = t2_ms = ticks_ms()
         threshold = 1.0
         while threshold > 0.5:
-            if mode_idx != TIME_SET:
+            if mode_idx == CLOCK:
                 if ticks_diff(t2_ms, t1_ms) > VERY_LONG_DUR_MS:
                     new_char = "t"  ### [t]ime set
                 elif ticks_diff(t2_ms, t1_ms) > LONG_DUR_MS:
@@ -468,11 +468,15 @@ while True:
             clock.resync_enabled = True
             clock.sync_clocks()
             mode_idx = CLOCK
+        elif mode_idx == STOPWATCH:
+            ### Exit stopwatch mode
+            mode_idx = CLOCK
         elif ticks_diff(t2_ms, t1_ms) < LONG_DUR_MS:
             background_idx = (background_idx + 1) % len(background)
             bg.stop()
             gc.collect()
             bg = background[background_idx]
+            bg.brightness = disp_bri
             bg.start(rtc_localtime, ss_ms, now_tms)
             bg_displayed = bg.displayed
         elif ticks_diff(t2_ms, t1_ms) < VERY_LONG_DUR_MS:
@@ -486,6 +490,10 @@ while True:
     ### Calculate a filtered light level to smooth/slow changes
     if adapt_bri and new_sec:
         light_level = display.read_light_level() * 0.125 + light_level * 0.875
+
+    ### TODO - remove
+    if new_sec:
+        gc.collect() ; print("MF", gc.mem_free())
 
     ### Skip communication (over radio) if not needed
     ### Important to use UTC time here as not all timezones's hours start at same time
