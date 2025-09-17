@@ -34,9 +34,10 @@ class Pendulum(HaloBackground):
         ### Classic small angle approximation
         angle = self._start_angle * math.cos(self._coef * t_s)
 
-        z_bri = 10
+        cbri = 0.65 * self.brightness
         il_radius = 0.22
         for z_idx, bri in get_pixels_near_angle(math.pi + angle, il_radius):
-            self._zip[z_idx] = (round(bri * bri * z_bri), 0, 0)
+            #self._zip[z_idx] = (round(bri * bri * z_bri), 0, 0)
+            self._zip[z_idx] = (self.z_bri_norm(bri, cbri), 0, 0)
 
         return self.HALO_CHANGED
