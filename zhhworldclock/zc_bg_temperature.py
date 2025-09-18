@@ -7,6 +7,7 @@ from zc_bg import HaloBackground
 
 
 class Temperature(HaloBackground):
+    ### Mid point will be 20 degrees Celsius
     MIN_TEMP = 5.0
     MAX_TEMP = 35.0
 
@@ -20,18 +21,20 @@ class Temperature(HaloBackground):
 
 
     def render(self, local_time, milliseconds, ticks_ms):
-        ### TODO only update every second
+        ### Update the temperature once a second
         if local_time[5] != self._last_s:
             self._temperature = 0.875 * self._temperature + 0.125 * self._function()
             self._last_s = local_time[5]
 
         bottom_idx = len(self._zip) // 2
-        temp_idx = max(0, min(bottom_idx, round(bottom_idx
+        first_idx = max(0, min(bottom_idx, round(bottom_idx
                                                 * (self.MAX_TEMP - self._temperature)
                                                 / (self.MAX_TEMP - self.MIN_TEMP))))
+
+        ### Set pixels from top to bottom to represent temperature level
+        ### With red colour on top half and blue on bottom half.
         cbri = 0.60 * self.brightness
-        cbri = 0.60 * self.brightness
-        for idx in range(temp_idx, bottom_idx + 1):
+        for idx in range(first_idx, bottom_idx + 1):
             ratio = idx / bottom_idx
             r_lvl = self.z_bri_norm((max(0.0, 2.0 * (0.56 - ratio))) ** 0.4, cbri)
             b_lvl = self.z_bri_norm((max(0.0, 2.0 * (ratio - 0.49))) ** 0.4, cbri)
