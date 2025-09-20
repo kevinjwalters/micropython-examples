@@ -20,16 +20,12 @@ SECOND = 5
 WEEKDAY = 6
 YEARDAY = 7
 
-
 ZIPCOUNT = 60
 ZIP_DIAMETER = 80        ### in mm
 ZIP_RADIUS = ZIP_DIAMETER / 2
 DIM_SCALE = ZIP_DIAMETER / 2
 
-### TODO - try an array.array to see how much memory it saves for Z_LED_POS AND M_LED_POS
-### indexing will need to be [2 * idx]
-
-### LED positions with values ranging from -1.0 to 1.0
+### ZIP LED positions with values ranging from -1.0 to 1.0
 ### top left of bounding square is -1,-1 bottom right is 1,1
 
 Z_LED_POS = array.array("f", [0.0] * (ZIPCOUNT * 2))
