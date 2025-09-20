@@ -71,7 +71,7 @@ from mcp7940_tiny import MCP7940
 from datecalc import DateCalc
 
 from zc_comboclock import ComboClock
-from zc_clockcomms import ClockComms, MsgTimeWms
+from zc_clockcomms import ClockComms, MsgTimeWms, MsgPresence
 
 from zc_bg_blank import Blank
 #from zc_bg_milliseconds import Milliseconds
@@ -82,7 +82,7 @@ from zc_bg_blank import Blank
 #from zc_bg_brightnesstest import BrightnessTest
 from zc_bg_larsonscanner import LarsonScanner
 #from zc_bg_temperature import Temperature
-from zc_bg_flag import Flag
+#from zc_bg_flag import Flag
 
 from zc_utils import YEAR, MONTH, MDAY, HOUR, MINUTE, SECOND, WEEKDAY
 
@@ -128,15 +128,26 @@ DAY_NAME = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", 
 BASE_YEAR = 2000
 
 BRI_STD = [float(x) for x in cfg["BRIGHTNESS"].split(":")]
-if len(BRI_STD) == 1:
-    BRI_STD.append(BRI_STD[0])
+bri_day = BRI_STD[0]
+bri_night = bri_day if len(BRI_STD) == 1 else BRI_STD[1]
 dusk, dawn = [int(x) for x in cfg["NIGHT"].split(":")] if cfg["NIGHT"].find(":") >= 0 else (None, None)
 adapt_bri = cfg["ADAPTIVE"]
 light_level = 0.0
 
-presence_pin = getattr(microbit, cfg["PIR"]) if cfg["PIR"] else None
-PRESENCE_TIME_S = 600
-presence_gone_t = None
+### TODO This is more complicated than I thought,
+### TODO pir needs to be able to send data over radio to other devices
+### using utc time would make more sense? I have forgotten what the RTC runs in.
+presence_en = False
+if cfg["PIR"]:
+    elem = cfg["PIR"].split(":")
+    ### If there's no local sensor then device will read from MASTER
+    presence_pin = getattr(microbit, elem[0]) if elem[0] else None
+    present_bri = float(elem[1])
+    absent_bri = float(elem[2])
+    presence_time_s = int(elem[3])
+    presence_absent_utc = None
+    presence_en = True
+
 
 print("NUMBER", cfg["NUMBER"])
 display.scroll("TZ=" + cfg["TZ"])
@@ -156,27 +167,31 @@ SHORT_DUR_MS = 175
 RADIO_TX_MS = 3  ### A guess at time taken to transmit
 
 
-def calc_brightness(md_idx, r_ltime, light_lvl, humans):
-    global presence_gone_t  ### pylint: disable=global-statement
+def calc_brightness(md_idx, r_utctime, light_lvl, humans):
+    global presence_absent_utc  ### pylint: disable=global-statement
 
-    value = BRI_STD[0]  ### day level
+    value = bri_day if humans is None else present_bri  ### day level
     if adapt_bri:
-        ### Quantize value to mostly stop this changing with tiny light level changes
-        value += round(light_lvl / 16.0) / 16.0 * adapt_bri
+        ### Quantize value to reduce changes with tiny light level changes
+        value = min(1.0, value + round(light_lvl / 16.0) / 16.0 * adapt_bri)
 
     ### Dim value for clock mode and if it's either night time
     ### or a human has not been detected by presence sensor recently
-    if md_idx != CLOCK or BRI_STD[0] == BRI_STD[1]:
+    if md_idx != CLOCK:
         pass
-    elif dusk is not None and (r_ltime[HOUR] >= dusk or r_ltime[HOUR] < dawn):
-        value = BRI_STD[1]  ### dim night level
-    elif humans is not None:
+    elif humans is None:
+        if dusk is not None and (r_utctime[HOUR] >= dusk or r_utctime[HOUR] < dawn):
+            value = bri_night  ### dim night level
+    else:
         if humans:
-            presence_gone_t = list(r_ltime)
-            DateCalc.add(presence_gone_t, PRESENCE_TIME_S)
+            presence_absent_utc = list(r_utctime)
+            DateCalc.add(presence_absent_utc, presence_time_s)
+            print("PIR DETECTION!")
+        elif presence_absent_utc is None:
+            presence_absent_utc = list(r_utctime)
 
-        if DateCalc.cmp(r_ltime, presence_gone_t) > 0:
-            value = BRI_STD[1]  ### dim night value
+        if DateCalc.cmp(r_utctime, presence_absent_utc) >= 0:
+            value = absent_bri
 
     return value
 
@@ -232,6 +247,7 @@ clock = ComboClock(mcp,
                    tz=cfg["TZ"]
                    )
 
+### TODO only enable this for NUMBER > 1 OR NUMBER != 1
 comms = ClockComms(radio, cfg["NUMBER"])
 
 stopwatch_hmsms = [0, 0, 0, 0.0]
@@ -259,7 +275,7 @@ background = (Blank(zip_px, display_image, disp_bri),
               #BrightnessTest(zip_px, display_image, disp_bri),
               LarsonScanner(zip_px, display_image, disp_bri),
               #Temperature(zip_px, display_image, disp_bri, {"function": temperature}),
-              Flag(zip_px, display_image, disp_bri, {"flag": "ukraine wales poland"})
+              #Flag(zip_px, display_image, disp_bri, {"flag": "ukraine wales poland"})
               )
 gc.collect()
 
@@ -296,13 +312,16 @@ while True:
     if mode_idx == CLOCK:
         updates = bg.render(rtc_localtime, ss_ms, now_tms)
 
+    ### new_sec needs to be True for first iteration of While loop
+    ### as calc_brightness initialised presence_absent_utc
+    ### and r_bri/etc/ needs initialising
     new_sec = rtc_localtime[SECOND] != last_ss
     last_ss = rtc_localtime[SECOND]
     if new_sec:
-        disp_bri = calc_brightness(mode_idx,
-                                   rtc_localtime,
-                                   light_level,
-                                   presence_pin.read_digital() if presence_pin else None)
+        presence = None
+        if presence_en:
+            presence = presence_pin.read_digital() if presence_pin is not None else False
+        disp_bri = calc_brightness(mode_idx, rtc_utctime, light_level, presence)
         if disp_bri != bg.brightness or r_bri is None:
             bg.brightness = disp_bri
             r_bri = bg.z_bri_norm(0.79, disp_bri)
@@ -495,9 +514,13 @@ while True:
     if new_sec:
         gc.collect() ; print("MF", gc.mem_free())
 
+
+    ### TODO - consider having a no comms mode for a single clock
+
     ### Skip communication (over radio) if not needed
     ### Important to use UTC time here as not all timezones's hours start at same time
-    if first_comms_done and 1 <= rtc_utctime[MINUTE] < 59:
+    broadcast_time = not (first_comms_done and 1 <= rtc_utctime[MINUTE] < 59)
+    if not broadcast_time and not presence_en:
         comms.off()
         continue
 
@@ -507,19 +530,27 @@ while True:
         first_comms_done = since_start_tms > FIRST_TX_DUR_TMS
 
     if MASTER:
-        ### Get fresh time and broadcast it
-        rtc_utc_time, ss_ms, now_tms = clock.utctime_with_ms_and_ticks
-        if ticks_diff(now_tms, last_tx_tms) >= TX_PERIOD_TMS:
-            comms.broadcast_msg(MsgTimeWms(rtc_utc_time, ss_ms))
-            last_tx_tms = now_tms
+        if broadcast_time:
+            ### Get fresh time and broadcast it
+            rtc_utctime, ss_ms, now_tms = clock.utctime_with_ms_and_ticks
+            if ticks_diff(now_tms, last_tx_tms) >= TX_PERIOD_TMS:
+                comms.broadcast_msg(MsgTimeWms(rtc_utctime, ss_ms))
+                last_tx_tms = now_tms
+        if presence_en and new_sec:
+            ### TODO this needs to have some kind of retransmit counter
+            ### and then shutdown the radio after it has transmitted on the master
+            comms.broadcast_msg(MsgPresence(presence_absent_utc))
     else:
         msgandhdr = comms.receive_msg_full()
-        ### Process time messsages if not recently synchronised
-        if msgandhdr is not None and ticks_diff(now_tms, last_sync_tms) > SYNC_PERIOD_TMS:
-            if isinstance(msgandhdr[0], MsgTimeWms):
-                msg, rssi, rx_tus, src, dst = msgandhdr
+        if msgandhdr is not None:
+            msg, rssi, rx_tus, src, dst = msgandhdr
+            ### Process time messsages if not recently synchronised
+            if isinstance(msg, MsgTimeWms) and ticks_diff(now_tms, last_sync_tms) > SYNC_PERIOD_TMS:
                 delay_us = ticks_diff(ticks_us(), rx_tus)
                 if clock.set_utctime(msg.rtc_time,
                                      msg.ss_ms,
                                      RADIO_TX_MS + delay_us // 1000):
                     last_sync_tms = now_tms
+            if isinstance(msg, MsgPresence):
+                presence_absent_utc = msg.rtc_time
+                print("RX", presence_absent_utc)
