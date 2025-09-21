@@ -247,8 +247,6 @@ clock = ComboClock(mcp,
 ### TODO only enable this for NUMBER > 1 OR NUMBER != 1
 comms = ClockComms(radio, cfg["NUMBER"]) if cfg["COUNT"] > 1 else None
 
-stopwatch_hmsms = [0, 0, 0, 0.0]
-
 mode_idx = 0
 mode = "cst"   ### first character of each mode
 ROTATE_MODES = 2
@@ -275,6 +273,113 @@ background = (Blank(zip_px, display_image, disp_bri),
               #Flag(zip_px, display_image, disp_bri, {"flag": "ukraine wales poland"})
               )
 gc.collect()
+
+
+def update_hands(r_b, g_b, b_b):
+    ### pylint: disable=too-many-branches,too-many-statements
+    global zip_px  ### pylint: disable=global-variable-not-assigned
+    di_char = None
+
+    h_idx = m_idx = s_idx = ms_idx = None
+    if mode_idx == STOPWATCH:
+        time_ms = clock.stopwatch_time_ms()
+        h_idx = zip_map(time_ms // 3600000, 12) % ZIPCOUNT
+        m_idx = zip_map(time_ms // 60000 % 60)
+        s_idx = zip_map(time_ms // 1000 % 60)
+        ms_idx = zip_map(time_ms % 1000, 1000)
+    elif mode_idx == CLOCK:
+        ### pylint: disable=superfluous-parens
+        if not (bg_displayed & (1 << HOUR)):
+            h_idx = zip_map(rtc_localtime[HOUR], 12) % ZIPCOUNT
+        if not (bg_displayed & (1 << MINUTE)):
+            m_idx = zip_map(rtc_localtime[MINUTE])
+        if not (bg_displayed & (1 << SECOND)):
+            s_idx = zip_map(rtc_localtime[SECOND])
+    elif mode_idx == TIME_SET:
+        if time_set_change in (HOUR, MINUTE, SECOND):
+            flash_on = (now_tms % 1000) > 300.0
+            if time_set_change != HOUR or flash_on:
+                h_idx = zip_map(rtc_localtime[HOUR], 12) % ZIPCOUNT
+            di_char = ("p" if rtc_localtime[HOUR] >= 12 else "a")
+            if time_set_change != MINUTE or flash_on:
+                m_idx = zip_map(rtc_localtime[MINUTE])
+            if time_set_change != SECOND or flash_on:
+                s_idx = zip_map(rtc_localtime[SECOND])
+        else:
+            if time_set_change == YEAR:  ### Yellow
+                h_idx = m_idx = zip_map(rtc_localtime[YEAR] - BASE_YEAR)
+                di_char = "y"
+            elif time_set_change == MONTH:  ### Magenta
+                h_idx = s_idx = zip_map(rtc_localtime[MONTH])  ### starts at 1
+                di_char = "m"
+            elif time_set_change == MDAY:  ### Cyan
+                m_idx = s_idx = zip_map(rtc_localtime[MDAY])  ### starts at 1
+                di_char = "d"
+            elif time_set_change == WEEKDAY:
+                h_idx = m_idx = s_idx = rtc_localtime[WEEKDAY]
+                di_char = DAY_NAME[rtc_localtime[WEEKDAY]][:2]
+
+    if h_idx is not None:
+        bri = min(255, zip_px[h_idx][0] + r_b) if zip_px[h_idx][0] < r_b >> 1 else 0
+        zip_px[h_idx] = (bri, zip_px[h_idx][1], zip_px[h_idx][2])
+    if m_idx is not None:
+        bri = min(255, zip_px[m_idx][1] + g_b) if zip_px[m_idx][1] < g_b >> 1 else 0
+        zip_px[m_idx] = (zip_px[m_idx][0], bri, zip_px[m_idx][2])
+    if s_idx is not None:
+        bri = min(255, zip_px[s_idx][2] + b_b) if zip_px[s_idx][2] < b_b >> 1 else 0
+        zip_px[s_idx] = (zip_px[s_idx][0], zip_px[s_idx][1], bri)
+    if ms_idx is not None:
+        bri = (min(255, zip_px[ms_idx][0] + r_b * 2
+               if clock.stopwatch_running
+               else r_b * 3 // 2) if zip_px[ms_idx][0] < r_b >> 1 else 0)
+        zip_px[ms_idx] = (bri, zip_px[ms_idx][1], zip_px[ms_idx][2])
+
+    return di_char
+
+### TODO - this is a bit heavy on globals
+def radio_tx_rx(utc_time, tms, new_s):
+    global presence_absent_utc, first_comms_done, last_tx_tms, last_sync_tms
+    ### TODO - review reading and writing to global variables here
+
+    ### Important to use UTC time here as not all timezones's hours start at same time
+    broadcast_time = not (first_comms_done and 1 <= utc_time[MINUTE] < 59)
+    if not broadcast_time and not presence_en:
+        comms.off()
+        return
+
+    comms.on()
+    if not first_comms_done:
+        since_start_tms = ticks_diff(tms, clock_start_tms)
+        first_comms_done = since_start_tms > FIRST_TX_DUR_TMS
+
+    if MASTER:
+        if broadcast_time:
+            ### Get fresh time and broadcast it
+            n_utc_time, n_ss_ms, n_now_tms = clock.utctime_with_ms_and_ticks
+            if ticks_diff(n_now_tms, last_tx_tms) >= TX_PERIOD_TMS:
+                comms.broadcast_msg(MsgTimeWms(n_utc_time, n_ss_ms))
+                last_tx_tms = n_now_tms
+        if presence_en and new_s:
+            ### TODO this needs to have some kind of retransmit counter
+            ### and then shutdown the radio after it has transmitted on the master
+            comms.broadcast_msg(MsgPresence(presence_absent_utc))
+    else:
+        ### Process up to 2 received messages (this will be per main loop)
+        for _ in range(2):
+            msgandhdr = comms.receive_msg_full()
+            if msgandhdr is None:
+                break
+            msg, _, rx_tus, _, _ = msgandhdr
+            ### Process time messsages if not recently synchronised
+            if isinstance(msg, MsgTimeWms) and ticks_diff(tms, last_sync_tms) > SYNC_PERIOD_TMS:
+                delay_us = ticks_diff(ticks_us(), rx_tus)
+                if clock.set_utctime(msg.utc_time,
+                                     msg.ss_ms,
+                                     RADIO_TX_MS + delay_us // 1000):
+                    last_sync_tms = tms
+            if isinstance(msg, MsgPresence):
+                presence_absent_utc = msg.utc_time
+
 
 bg = background[background_idx]
 bg.start(*clock.localtime_with_ms_and_ticks)
@@ -325,65 +430,7 @@ while True:
             g_bri = bg.z_bri_norm(0.62, disp_bri)
             b_bri = bg.z_bri_norm(0.90, disp_bri)
 
-    h_idx = m_idx = s_idx = ms_idx = None
-    display_char = None
-    if mode_idx == STOPWATCH:
-        time_ms = clock.stopwatch_time_ms()
-        stopwatch_hmsms[:] = [time_ms // 3600000,
-                              time_ms // 60000 % 60,
-                              time_ms // 1000 % 60,
-                              time_ms % 1000]
-        h_idx = zip_map(stopwatch_hmsms[0], 12) % ZIPCOUNT
-        m_idx = zip_map(stopwatch_hmsms[1])
-        s_idx = zip_map(stopwatch_hmsms[2])
-        ms_idx = zip_map(stopwatch_hmsms[3], 1000)
-    elif mode_idx == CLOCK:
-        ### pylint: disable=superfluous-parens
-        if not (bg_displayed & (1 << HOUR)):
-            h_idx = zip_map(rtc_localtime[HOUR], 12) % ZIPCOUNT
-        if not (bg_displayed & (1 << MINUTE)):
-            m_idx = zip_map(rtc_localtime[MINUTE])
-        if not (bg_displayed & (1 << SECOND)):
-            s_idx = zip_map(rtc_localtime[SECOND])
-    elif mode_idx == TIME_SET:
-        if time_set_change in (HOUR, MINUTE, SECOND):
-            flash_on = (now_tms % 1000) > 300.0
-            if time_set_change != HOUR or flash_on:
-                h_idx = zip_map(rtc_localtime[HOUR], 12) % ZIPCOUNT
-            display_char = ("p" if rtc_localtime[HOUR] >= 12 else "a")
-            if time_set_change != MINUTE or flash_on:
-                m_idx = zip_map(rtc_localtime[MINUTE])
-            if time_set_change != SECOND or flash_on:
-                s_idx = zip_map(rtc_localtime[SECOND])
-        else:
-            if time_set_change == YEAR:  ### Yellow
-                h_idx = m_idx = zip_map(rtc_localtime[YEAR] - BASE_YEAR)
-                print(rtc_localtime[YEAR])
-                display_char = "y"
-            elif time_set_change == MONTH:  ### Magenta
-                h_idx = s_idx = zip_map(rtc_localtime[MONTH])  ### starts at 1
-                display_char = "m"
-            elif time_set_change == MDAY:  ### Cyan
-                b_idx = s_idx = zip_map(rtc_localtime[MDAY])  ### starts at 1
-                display_char = "d"
-            elif time_set_change == WEEKDAY:
-                h_idx = m_idx = s_idx = rtc_localtime[WEEKDAY]
-                display_char = DAY_NAME[rtc_localtime[WEEKDAY]][:2]
-
-    if h_idx is not None:
-        bri = min(255, zip_px[h_idx][0] + r_bri) if zip_px[h_idx][0] < r_bri >> 1 else 0
-        zip_px[h_idx] = (bri, zip_px[h_idx][1], zip_px[h_idx][2])
-    if m_idx is not None:
-        bri = min(255, zip_px[m_idx][1] + g_bri) if zip_px[m_idx][1] < g_bri >> 1 else 0
-        zip_px[m_idx] = (zip_px[m_idx][0], bri, zip_px[m_idx][2])
-    if s_idx is not None:
-        bri = min(255, zip_px[s_idx][2] + b_bri) if zip_px[s_idx][2] < b_bri >> 1 else 0
-        zip_px[s_idx] = (zip_px[s_idx][0], zip_px[s_idx][1], bri)
-    if ms_idx is not None:
-        bri = (min(255, zip_px[ms_idx][0] + r_bri * 2
-               if clock.stopwatch_running
-               else r_bri * 3 // 2) if zip_px[ms_idx][0] < r_bri >> 1 else 0)
-        zip_px[ms_idx] = (bri, zip_px[ms_idx][1], zip_px[ms_idx][2])
+    display_char = update_hands(r_bri, g_bri, b_bri)
     ##updates |= HaloBackground.HALO_CHANGED
 
     if display_char is not None:
@@ -513,40 +560,5 @@ while True:
 
 
     ### Skip communication (over radio) if not needed
-    ### Important to use UTC time here as not all timezones's hours start at same time
-    if comms is None:
-        continue
-    broadcast_time = not (first_comms_done and 1 <= rtc_utctime[MINUTE] < 59)
-    if not broadcast_time and not presence_en:
-        comms.off()
-        continue
-
-    comms.on()
-    if not first_comms_done:
-        since_start_tms = ticks_diff(now_tms, clock_start_tms)
-        first_comms_done = since_start_tms > FIRST_TX_DUR_TMS
-
-    if MASTER:
-        if broadcast_time:
-            ### Get fresh time and broadcast it
-            rtc_utctime, ss_ms, now_tms = clock.utctime_with_ms_and_ticks
-            if ticks_diff(now_tms, last_tx_tms) >= TX_PERIOD_TMS:
-                comms.broadcast_msg(MsgTimeWms(rtc_utctime, ss_ms))
-                last_tx_tms = now_tms
-        if presence_en and new_sec:
-            ### TODO this needs to have some kind of retransmit counter
-            ### and then shutdown the radio after it has transmitted on the master
-            comms.broadcast_msg(MsgPresence(presence_absent_utc))
-    else:
-        msgandhdr = comms.receive_msg_full()
-        if msgandhdr is not None:
-            msg, rssi, rx_tus, src, dst = msgandhdr
-            ### Process time messsages if not recently synchronised
-            if isinstance(msg, MsgTimeWms) and ticks_diff(now_tms, last_sync_tms) > SYNC_PERIOD_TMS:
-                delay_us = ticks_diff(ticks_us(), rx_tus)
-                if clock.set_utctime(msg.utc_time,
-                                     msg.ss_ms,
-                                     RADIO_TX_MS + delay_us // 1000):
-                    last_sync_tms = now_tms
-            if isinstance(msg, MsgPresence):
-                presence_absent_utc = msg.utc_time
+    if comms is not None:
+        radio_tx_rx(rtc_utctime, now_tms, new_sec)
