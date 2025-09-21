@@ -134,9 +134,6 @@ dusk, dawn = [int(x) for x in cfg["NIGHT"].split(":")] if cfg["NIGHT"].find(":")
 adapt_bri = cfg["ADAPTIVE"]
 light_level = 0.0
 
-### TODO This is more complicated than I thought,
-### TODO pir needs to be able to send data over radio to other devices
-### using utc time would make more sense? I have forgotten what the RTC runs in.
 presence_en = False
 if cfg["PIR"]:
     elem = cfg["PIR"].split(":")
@@ -248,7 +245,7 @@ clock = ComboClock(mcp,
                    )
 
 ### TODO only enable this for NUMBER > 1 OR NUMBER != 1
-comms = ClockComms(radio, cfg["NUMBER"])
+comms = ClockComms(radio, cfg["NUMBER"]) if cfg["COUNT"] > 1 else None
 
 stopwatch_hmsms = [0, 0, 0, 0.0]
 
@@ -515,10 +512,10 @@ while True:
         gc.collect() ; print("MF", gc.mem_free())
 
 
-    ### TODO - consider having a no comms mode for a single clock
-
     ### Skip communication (over radio) if not needed
     ### Important to use UTC time here as not all timezones's hours start at same time
+    if comms is None:
+        continue
     broadcast_time = not (first_comms_done and 1 <= rtc_utctime[MINUTE] < 59)
     if not broadcast_time and not presence_en:
         comms.off()
