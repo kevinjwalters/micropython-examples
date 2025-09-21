@@ -100,8 +100,8 @@ class MsgPresence(ClockMsg):
                 data = ustruct.unpack_from(cls.FMT,
                                            buf,
                                            _MSG_PAYLOAD)
-                return MsgTimeWms((data[1] + cls.EPOCH_YEAR, data[2], data[3], data[4],
-                                   data[5], data[6], data[7], data[8]))
+                return MsgPresence((data[1] + cls.EPOCH_YEAR, data[2], data[3], data[4],
+                                    data[5], data[6], data[7], data[8]))
         except (IndexError, ValueError):
             pass
         return None
