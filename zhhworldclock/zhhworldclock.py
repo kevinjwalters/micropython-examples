@@ -547,10 +547,9 @@ while True:
             ### Process time messsages if not recently synchronised
             if isinstance(msg, MsgTimeWms) and ticks_diff(now_tms, last_sync_tms) > SYNC_PERIOD_TMS:
                 delay_us = ticks_diff(ticks_us(), rx_tus)
-                if clock.set_utctime(msg.rtc_time,
+                if clock.set_utctime(msg.utc_time,
                                      msg.ss_ms,
                                      RADIO_TX_MS + delay_us // 1000):
                     last_sync_tms = now_tms
             if isinstance(msg, MsgPresence):
-                presence_absent_utc = msg.rtc_time
-                print("RX", presence_absent_utc)
+                presence_absent_utc = msg.utc_time
