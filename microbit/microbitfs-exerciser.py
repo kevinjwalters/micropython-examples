@@ -1,4 +1,4 @@
-### Micro:bit file system exercsier v0.1
+### Micro:bit file system exercsier v0.2
 
 ### MIT License
 
@@ -33,13 +33,52 @@ import machine
 import os
 
 
-### File system parameters
-fs_start=0x70000
-fs_end=0x78000
-log_chunk_size=7
-
 ### Hardware, page size nRF51 1k, nRF52 4k
 page_size = 4096 if os.uname().machine.find("nRF52") >= 0 else 1024
+lt_offset = page_size - 16
+
+TBL_ID_FS = 0x03
+
+def findlayouttable():
+    ### Reverse scan through flash for magic numbers which indicate layout table
+    ### TODO - forward might be better - make this configurable and default to forward
+    mask32 = 0xffffffff
+    for addr in range(0x80000 - page_size, 0 - page_size, 0 - page_size):
+        ### The and (&) ensures mem32 are unsigned
+        m1 = machine.mem32[addr + lt_offset + 0x00] & mask32
+        m2 = machine.mem32[addr + lt_offset + 0x0c] & mask32
+        tbl_ps = machine.mem16[addr + lt_offset + 0x0a]
+        if m1 == 0x597f30fe and m2 == 0xc1b1d79d:
+            if 1 << tbl_ps != page_size:
+                raise Exception("Page size in layout table does not match hardware - OH NO!")
+            return addr
+
+    return None
+
+
+def fsloc():
+    sec_page_num = None
+    sec_len = None
+    table_page = findlayouttable()
+    ### sloppy parsing hereby
+    table_len = machine.mem16[table_page + lt_offset + 0x06]
+    for offset in range(0 - table_len, 0, 16):
+        row_addr = table_page + lt_offset + offset
+        if machine.mem8[row_addr] == TBL_ID_FS:
+            sec_page_num = machine.mem16[row_addr + 0x02]
+            sec_len = machine.mem32[row_addr + 0x04]
+            break
+
+    return (sec_page_num * page_size, sec_page_num * page_size + sec_len) if sec_len is not None else (None, None)
+
+
+### File system parameters
+#fs_start=0x70000
+#fs_end=0x78000
+(fs_start, fs_end) = fsloc()
+print("FS", hex(fs_start), hex(fs_end))
+log_chunk_size=7
+
 
 ### Constants based on microbitfs.c
 MAX_FILENAME_LENGTH = 120
